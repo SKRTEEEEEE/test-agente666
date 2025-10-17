@@ -1,0 +1,171 @@
+name: Convert Issue to Task File
+
+on:
+  issues:
+    types: [opened, reopened, edited, labeled]
+  # (opcional) push:    # descomenta si quieres que también se ejecute en push
+  #   branches: [main]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  create-task-file:
+    runs-on: ubuntu-latest
+    # Ejecutar solo si el issue tiene el label "👿 Task"
+    if: ${{ github.event_name == 'issues' && (contains(github.event.issue.labels.*.name, '👿 Task')) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          # permitir push con el token por defecto
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Generate task file from issue
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // Solo issues (por seguridad)
+            if (context.eventName !== 'issues') {
+              console.log('Evento no soportado:', context.eventName);
+              return;
+            }
+
+            const issue = context.payload.issue;
+            if (!issue) {
+              console.error('No hay payload.issue disponible');
+              process.exit(1);
+            }
+
+            const issueNumber = issue.number;
+            const issueTitle = (issue.title || '').toString();
+            const issueBody = (issue.body || '').toString();
+
+            if (!issueTitle) {
+              console.error('Título del issue vacío — abortando');
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: '❌ **Error:** el issue no tiene título.'
+              });
+              process.exit(1);
+            }
+
+            // Sanitizar título para nombre de archivo
+            const sanitizedTitle = issueTitle
+              .toLowerCase()
+              .replace(/\[.*?\]/g, '')            // quitar versiones tipo [v1.0.0]
+              .normalize('NFKD')                  // normalizar para acentos
+              .replace(/[\u0300-\u036f]/g, '')    // quitar diacríticos
+              .replace(/[^a-z0-9]+/g, '-')        // solo a-z0-9 => guiones
+              .replace(/^-+|-+$/g, '')
+              .substring(0, 60);
+
+            const filename = `${issueNumber}-${sanitizedTitle || 'issue'}.md`;
+            const taskDir = path.join(process.env.GITHUB_WORKSPACE || '.', 'task');
+
+            // Asegurarse de que exista el directorio
+            if (!fs.existsSync(taskDir)) {
+              fs.mkdirSync(taskDir, { recursive: true });
+            }
+
+            // Función auxiliar para extraer una sección (incluye encabezado)
+            function extractSection(body, heading) {
+              const re = new RegExp(`(^##\\s+${escapeRegExp(heading)}[\\s\\S]*?)(?=\\n##\\s|$)`, 'm');
+              const match = body.match(re);
+              return match ? match[1].trim() : '';
+            }
+
+            function escapeRegExp(string) {
+              return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            }
+
+            // Queremos conservar: título, ## 🎯 Objective, ## 🔑 Key Points
+            const objective = extractSection(issueBody, '🎯 Objective');
+            const keyPoints = extractSection(issueBody, '🔑 Key Points');
+
+            // Validar formato mínimo
+            if (!objective && !keyPoints) {
+              const commentBody = '❌ **Error en formato del issue**\n\nEl issue debe incluir al menos una de las secciones:\n- `## 🎯 Objective`\n- `## 🔑 Key Points`\n\nPor favor actualiza el issue y vuelve a etiquetarlo con `👿 Task`.';
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: commentBody
+              });
+              console.error('Issue sin Objective ni Key Points — abortando');
+              process.exit(1);
+            }
+
+            // Construir contenido final: título + las secciones (si existen)
+            let fileContent = `# ${issueTitle.trim()}\n\n`;
+            if (objective) {
+              // eliminar secciones internas de Time o Definition of Done si están dentro
+              const cleanedObjective = objective.replace(/##\s+⏱️[\s\S]*?(?=\n##\s|$)/g, '').replace(/##\s+✅ Definition of Done[\s\S]*?(?=\n##\s|$)/g, '');
+              fileContent += cleanedObjective + '\n\n';
+            }
+            if (keyPoints) {
+              const cleanedKeyPoints = keyPoints.replace(/##\s+⏱️[\s\S]*?(?=\n##\s|$)/g, '').replace(/##\s+✅ Definition of Done[\s\S]*?(?=\n##\s|$)/g, '');
+              fileContent += cleanedKeyPoints + '\n';
+            }
+
+            // Trim final
+            fileContent = fileContent.trim() + '\n';
+
+            // Guardar fichero
+            const taskPath = path.join(taskDir, filename);
+            fs.writeFileSync(taskPath, fileContent, 'utf8');
+            console.log(`✅ Task file creado: task/${filename}`);
+
+            // Commit & push
+            const { execSync } = require('child_process');
+            try {
+              execSync('git config user.email "action@github.com"');
+              execSync('git config user.name "GitHub Action"');
+              execSync(`git add "${path.relative(process.cwd(), taskPath)}"`);
+              // Solo commit si hay cambios
+              try {
+                execSync(`git commit -m "chore: Create task file for issue #${issueNumber} (${filename})"`, { stdio: 'pipe' });
+                execSync('git push', { stdio: 'pipe' });
+                console.log('✅ Cambios pusheados');
+              } catch (commitError) {
+                // Si no hay cambios para commitear, git commit retorna no-zero; lo ignoramos
+                if (/nothing to commit/i.test(commitError.message) || commitError.status === 1) {
+                  console.log('No hay cambios nuevos para commitear (archivo ya existe o sin cambios).');
+                } else {
+                  throw commitError;
+                }
+              }
+
+              // Comentar éxito en el issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `✅ Task file creado: \`task/${filename}\``
+              });
+
+            } catch (error) {
+              console.error('Error durante commit/push:', error.message || error);
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `❌ Error al guardar el task file: ${error.message || String(error)}`
+              });
+              process.exit(1);
+            }
