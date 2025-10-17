@@ -12,7 +12,7 @@ Trying new issue-to-task
 
 <!-- Key point what needs to be accomplished, representing the idea of this Task -->
 
-- [ ] Vamosleee
+- [x] Vamosleee
 - [ ] Estamos a tope
 
 Jefe de equipo
