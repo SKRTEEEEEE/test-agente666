@@ -1,11 +1,14 @@
 name: Convert todo.md to GitHub Issues
 
+# FIX: error al parse texto direct
+# FEAT: assign-me, label-by-convetional-commit
+
 on:
   push:
     branches-ignore:
       - 'agent/**'
-    # paths:
-    #   - 'todo.md'
+    paths:
+      - 'todo.md'
   pull_request:
     branches-ignore:
       - 'agent/**'

@@ -54,7 +54,7 @@ jobs:
             }
 
             // --- Helpers ---
-            const taskDir = path.join(process.env.GITHUB_WORKSPACE, "task");
+            const taskDir = path.join(process.env.GITHUB_WORKSPACE, "docs", "task");
             if (!fs.existsSync(taskDir)) fs.mkdirSync(taskDir, { recursive: true });
 
             const sanitizedTitle = issueTitle
@@ -117,12 +117,12 @@ jobs:
               : null;
 
             if (existing && existing.trim() === fileContent.trim()) {
-              console.log(`ℹ️ No changes detected for task/${filename}`);
+              console.log(`ℹ️ No changes detected for docs/task/${filename}`);
               return;
             }
 
             fs.writeFileSync(taskPath, fileContent, "utf8");
-            console.log(`✅ Task file ${existing ? "updated" : "created"}: task/${filename}`);
+            console.log(`✅ Task file ${existing ? "updated" : "created"}: docs/task/${filename}`);
 
             // --- Commit & push ---
             try {
@@ -137,8 +137,8 @@ jobs:
 
             // --- Comment only once (English) ---
             const body = existing
-              ? `♻️ Task file **updated**: \`task/${filename}\``
-              : `✅ Task file **created**: \`task/${filename}\``;
+              ? `♻️ Task file **updated**: \`docs/task/${filename}\``
+              : `✅ Task file **created**: \`docs/task/${filename}\``;
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
