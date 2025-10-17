@@ -32,7 +32,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           todo-file-path: 'todo.md'
-          labels: 'automated,agente666'
+          labels: 'automated,agent666'
           delete-todo-after: 'true'
 
       - name: Show results
