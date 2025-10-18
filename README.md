@@ -6,12 +6,13 @@ This repository contains various applications developed as part of the Agent666 
 
 ### app-go
 
-A simple "Hello World" HTTP server written in Go.
+A Go HTTP server that provides GitHub user issue information and basic health checks.
 
 #### Features
 - HTTP server running on port 8080
 - Root endpoint (`/`) returns "Hello World!"
 - Health check endpoint (`/health`) returns "OK"
+- GitHub issues endpoint (`/issues/{user}`) returns all issues from a user's public repositories, grouped by repository
 - Fully containerized with Docker
 - Comprehensive test suite (unit and integration tests)
 
@@ -29,9 +30,16 @@ docker run -d -p 8080:8080 --name hello-world-go hello-world-go:latest
 
 Test the endpoints:
 ```bash
-curl http://localhost:8080/          # Returns: Hello World!
-curl http://localhost:8080/health     # Returns: OK
+curl http://localhost:8080/              # Returns: Hello World!
+curl http://localhost:8080/health        # Returns: OK
+curl http://localhost:8080/issues/octocat # Returns: JSON with issues grouped by repository
 ```
+
+The `/issues/{user}` endpoint returns a JSON array of repositories with issues, where each repository includes:
+- Repository name, full name, and URL
+- Repository description
+- Star and fork counts
+- Array of issues with details (number, title, state, URL, timestamps, creator)
 
 Stop the container:
 ```bash
