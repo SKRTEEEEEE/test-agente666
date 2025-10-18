@@ -1,12 +1,16 @@
-# Hello World Go Application
+# GitHub Issues Go Application
 
-A simple HTTP server written in Go that responds with "Hello World!" on the root endpoint.
+An HTTP server written in Go that provides GitHub user issue information and basic health check endpoints.
 
 ## Features
 
 - **HTTP Server**: Runs on port 8080
 - **Root Endpoint** (`/`): Returns "Hello World!"
 - **Health Check** (`/health`): Returns "OK" for health monitoring
+- **GitHub Issues** (`/issues/{user}`): Fetches and returns all issues from a user's public repositories
+  - Issues grouped by repository
+  - Excludes repositories without issues
+  - Includes repository metadata (stars, forks, description, URL)
 - **Dockerized**: Multi-stage Docker build for optimized image size
 - **Tested**: Comprehensive unit and integration tests
 
@@ -22,8 +26,9 @@ docker run -d -p 8080:8080 --name hello-world-go hello-world-go:latest
 
 Test:
 ```bash
-curl http://localhost:8080/          # Returns: Hello World!
-curl http://localhost:8080/health     # Returns: OK
+curl http://localhost:8080/              # Returns: Hello World!
+curl http://localhost:8080/health        # Returns: OK
+curl http://localhost:8080/issues/octocat # Returns: JSON with repository issues
 ```
 
 ### Using Go Locally
@@ -98,6 +103,49 @@ Health check endpoint for monitoring.
 ```
 OK
 ```
+
+### GET /issues/{user}
+
+Fetches all issues from a GitHub user's public repositories.
+
+**Parameters:**
+- `user` - GitHub username (e.g., `octocat`, `torvalds`)
+
+**Response:**
+```json
+[
+  {
+    "name": "repository-name",
+    "full_name": "username/repository-name",
+    "url": "https://github.com/username/repository-name",
+    "description": "Repository description",
+    "stars": 12345,
+    "forks": 6789,
+    "issues": [
+      {
+        "number": 1,
+        "title": "Issue title",
+        "state": "open",
+        "html_url": "https://github.com/username/repository-name/issues/1",
+        "created_at": "2025-01-01T00:00:00Z",
+        "updated_at": "2025-01-02T00:00:00Z",
+        "user": {
+          "login": "issue-creator"
+        }
+      }
+    ]
+  }
+]
+```
+
+**Notes:**
+- Only repositories with issues are included
+- Returns both open and closed issues
+- Uses GitHub's public API (no authentication required)
+- Limited to 100 repositories and 100 issues per repository
+- Returns empty array if user has no repositories with issues
+- Returns 404 if user doesn't exist
+- Returns 400 if username is empty
 
 ## Dependencies
 
