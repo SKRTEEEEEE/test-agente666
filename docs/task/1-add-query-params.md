@@ -4,12 +4,20 @@
 
 <!-- Brief description of what needs to be accomplished -->
 
-Implement according to specification
+Add query params in /issues/{user}
 
 ## 🔑 Key Points
 
-### 🖲️/💻/⛓️ Implementation
+### 🖲️ Refactor: Implementation
 
 <!-- Key point what needs to be accomplished, representing the idea of this Task -->
 
-- [ ] Complete implementation
+- [ ] Add query params with ?q=open
+  - [ ] This make limit to open issues only
+
+### Feat: PR endpoint
+
+- [ ] Create a endpoint that shows the PR of a user
+- [ ] Same with /issues but for PR
+  - [ ] Group by repos with more info of repo and PR
+  - [ ] Query params for only open
