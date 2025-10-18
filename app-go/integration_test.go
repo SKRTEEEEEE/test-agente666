@@ -123,3 +123,138 @@ func TestIssuesEndpointIntegration(t *testing.T) {
 		})
 	}
 }
+
+// TestIssuesEndpointWithQueryParamIntegration tests the issues endpoint with query params
+func TestIssuesEndpointWithQueryParamIntegration(t *testing.T) {
+	// Setup server on port 8084
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/issues/", IssuesHandler)
+		http.ListenAndServe(":8084", mux)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	tests := []struct {
+		name           string
+		endpoint       string
+		expectedStatus int
+		checkJSON      bool
+	}{
+		{
+			name:           "Issues with q=open query param",
+			endpoint:       "/issues/octocat?q=open",
+			expectedStatus: http.StatusOK,
+			checkJSON:      true,
+		},
+		{
+			name:           "Issues without query param",
+			endpoint:       "/issues/octocat",
+			expectedStatus: http.StatusOK,
+			checkJSON:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := http.Get(fmt.Sprintf("http://localhost:8084%s", tt.endpoint))
+			assert.NoError(t, err, "Should be able to connect to server")
+			assert.Equal(t, tt.expectedStatus, resp.StatusCode, "Should return expected status code")
+
+			if tt.checkJSON {
+				contentType := resp.Header.Get("Content-Type")
+				assert.Contains(t, contentType, "application/json", "Should return JSON content type")
+			}
+		})
+	}
+}
+
+// TestPREndpointIntegration tests the PR endpoint with real GitHub API
+func TestPREndpointIntegration(t *testing.T) {
+	// Setup server on port 8085
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/pr/", PRHandler)
+		http.ListenAndServe(":8085", mux)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	tests := []struct {
+		name           string
+		username       string
+		expectedStatus int
+		checkJSON      bool
+	}{
+		{
+			name:           "Valid user returns JSON response",
+			username:       "octocat",
+			expectedStatus: http.StatusOK,
+			checkJSON:      true,
+		},
+		{
+			name:           "Invalid user returns 404",
+			username:       "thisuserdoesnotexist999999",
+			expectedStatus: http.StatusNotFound,
+			checkJSON:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := http.Get(fmt.Sprintf("http://localhost:8085/pr/%s", tt.username))
+			assert.NoError(t, err, "Should be able to connect to server")
+			assert.Equal(t, tt.expectedStatus, resp.StatusCode, "Should return expected status code")
+
+			if tt.checkJSON {
+				contentType := resp.Header.Get("Content-Type")
+				assert.Contains(t, contentType, "application/json", "Should return JSON content type")
+			}
+		})
+	}
+}
+
+// TestPREndpointWithQueryParamIntegration tests the PR endpoint with query params
+func TestPREndpointWithQueryParamIntegration(t *testing.T) {
+	// Setup server on port 8086
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/pr/", PRHandler)
+		http.ListenAndServe(":8086", mux)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	tests := []struct {
+		name           string
+		endpoint       string
+		expectedStatus int
+		checkJSON      bool
+	}{
+		{
+			name:           "PRs with q=open query param",
+			endpoint:       "/pr/octocat?q=open",
+			expectedStatus: http.StatusOK,
+			checkJSON:      true,
+		},
+		{
+			name:           "PRs without query param",
+			endpoint:       "/pr/octocat",
+			expectedStatus: http.StatusOK,
+			checkJSON:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := http.Get(fmt.Sprintf("http://localhost:8086%s", tt.endpoint))
+			assert.NoError(t, err, "Should be able to connect to server")
+			assert.Equal(t, tt.expectedStatus, resp.StatusCode, "Should return expected status code")
+
+			if tt.checkJSON {
+				contentType := resp.Header.Get("Content-Type")
+				assert.Contains(t, contentType, "application/json", "Should return JSON content type")
+			}
+		})
+	}
+}

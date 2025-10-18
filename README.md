@@ -12,7 +12,10 @@ A Go HTTP server that provides GitHub user issue information and basic health ch
 - HTTP server running on port 8080
 - Root endpoint (`/`) returns "Hello World!"
 - Health check endpoint (`/health`) returns "OK"
-- GitHub issues endpoint (`/issues/{user}`) returns all issues from a user's public repositories, grouped by repository
+- GitHub issues endpoint (`/issues/{user}`) returns issues from a user's public repositories, grouped by repository
+  - Query parameter support: `?q=open` to filter only open issues
+- GitHub pull requests endpoint (`/pr/{user}`) returns pull requests from a user's public repositories, grouped by repository
+  - Query parameter support: `?q=open` to filter only open pull requests
 - Fully containerized with Docker
 - Comprehensive test suite (unit and integration tests)
 
@@ -30,9 +33,12 @@ docker run -d -p 8080:8080 --name hello-world-go hello-world-go:latest
 
 Test the endpoints:
 ```bash
-curl http://localhost:8080/              # Returns: Hello World!
-curl http://localhost:8080/health        # Returns: OK
-curl http://localhost:8080/issues/octocat # Returns: JSON with issues grouped by repository
+curl http://localhost:8080/                    # Returns: Hello World!
+curl http://localhost:8080/health              # Returns: OK
+curl http://localhost:8080/issues/octocat      # Returns: JSON with all issues grouped by repository
+curl http://localhost:8080/issues/octocat?q=open  # Returns: JSON with only open issues
+curl http://localhost:8080/pr/octocat          # Returns: JSON with all pull requests grouped by repository
+curl http://localhost:8080/pr/octocat?q=open   # Returns: JSON with only open pull requests
 ```
 
 The `/issues/{user}` endpoint returns a JSON array of repositories with issues, where each repository includes:
@@ -40,6 +46,12 @@ The `/issues/{user}` endpoint returns a JSON array of repositories with issues, 
 - Repository description
 - Star and fork counts
 - Array of issues with details (number, title, state, URL, timestamps, creator)
+
+The `/pr/{user}` endpoint returns a JSON array of repositories with pull requests, where each repository includes:
+- Repository name, full name, and URL
+- Repository description
+- Star and fork counts
+- Array of pull requests with details (number, title, state, URL, timestamps, creator, merged_at)
 
 Stop the container:
 ```bash

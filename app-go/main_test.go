@@ -115,3 +115,120 @@ func TestIssuesHandlerMethod(t *testing.T) {
 
 	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code, "Handler should return 405 for non-GET methods")
 }
+
+// TestIssuesHandlerWithQueryParamOpen tests the issues endpoint with ?q=open query param
+func TestIssuesHandlerWithQueryParamOpen(t *testing.T) {
+	req, err := http.NewRequest("GET", "/issues/octocat?q=open", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(IssuesHandler)
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code, "Handler should return 200 OK")
+	assert.Contains(t, rr.Header().Get("Content-Type"), "application/json", "Should return JSON content type")
+}
+
+// TestIssuesHandlerWithoutQueryParam tests the issues endpoint without query param (should return all)
+func TestIssuesHandlerWithoutQueryParam(t *testing.T) {
+	req, err := http.NewRequest("GET", "/issues/octocat", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(IssuesHandler)
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code, "Handler should return 200 OK")
+	assert.Contains(t, rr.Header().Get("Content-Type"), "application/json", "Should return JSON content type")
+}
+
+// TestPRHandler tests the PR endpoint with a valid user
+func TestPRHandler(t *testing.T) {
+	req, err := http.NewRequest("GET", "/pr/octocat", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(PRHandler)
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code, "Handler should return 200 OK")
+	assert.Contains(t, rr.Header().Get("Content-Type"), "application/json", "Should return JSON content type")
+}
+
+// TestPRHandlerEmptyUser tests the PR endpoint with empty username
+func TestPRHandlerEmptyUser(t *testing.T) {
+	req, err := http.NewRequest("GET", "/pr/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(PRHandler)
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code, "Handler should return 400 for empty user")
+}
+
+// TestPRHandlerInvalidUser tests the PR endpoint with non-existent user
+func TestPRHandlerInvalidUser(t *testing.T) {
+	req, err := http.NewRequest("GET", "/pr/thisuserdoesnotexist12345678990", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(PRHandler)
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code, "Handler should return 404 for non-existent user")
+}
+
+// TestPRHandlerMethod tests that only GET method is supported
+func TestPRHandlerMethod(t *testing.T) {
+	req, err := http.NewRequest("POST", "/pr/octocat", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(PRHandler)
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code, "Handler should return 405 for non-GET methods")
+}
+
+// TestPRHandlerWithQueryParamOpen tests the PR endpoint with ?q=open query param
+func TestPRHandlerWithQueryParamOpen(t *testing.T) {
+	req, err := http.NewRequest("GET", "/pr/octocat?q=open", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(PRHandler)
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code, "Handler should return 200 OK")
+	assert.Contains(t, rr.Header().Get("Content-Type"), "application/json", "Should return JSON content type")
+}
+
+// TestPRHandlerWithoutQueryParam tests the PR endpoint without query param (should return all)
+func TestPRHandlerWithoutQueryParam(t *testing.T) {
+	req, err := http.NewRequest("GET", "/pr/octocat", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(PRHandler)
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code, "Handler should return 200 OK")
+	assert.Contains(t, rr.Header().Get("Content-Type"), "application/json", "Should return JSON content type")
+}
