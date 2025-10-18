@@ -4,7 +4,7 @@
 
 <!-- Brief description of what needs to be accomplished -->
 
-Implement according to specification
+Make a hello world in go
 
 ## 🔑 Key Points
 
@@ -13,3 +13,4 @@ Implement according to specification
 <!-- Key point what needs to be accomplished, representing the idea of this Task -->
 
 - [ ] Complete implementation
+- [ ] Te app will be in a folder ./app-go
