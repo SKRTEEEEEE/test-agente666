@@ -45,6 +45,31 @@ type RepositoryWithIssues struct {
 	Issues      []GitHubIssue `json:"issues"`
 }
 
+// GitHubPullRequest represents a GitHub pull request
+type GitHubPullRequest struct {
+	Number    int       `json:"number"`
+	Title     string    `json:"title"`
+	State     string    `json:"state"`
+	HTMLURL   string    `json:"html_url"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	User      struct {
+		Login string `json:"login"`
+	} `json:"user"`
+	MergedAt *time.Time `json:"merged_at,omitempty"`
+}
+
+// RepositoryWithPRs represents a repository with its pull requests
+type RepositoryWithPRs struct {
+	Name         string              `json:"name"`
+	FullName     string              `json:"full_name"`
+	URL          string              `json:"url"`
+	Description  string              `json:"description"`
+	Stars        int                 `json:"stars"`
+	Forks        int                 `json:"forks"`
+	PullRequests []GitHubPullRequest `json:"pull_requests"`
+}
+
 // HelloHandler handles the root endpoint
 func HelloHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Hello World!")
@@ -73,6 +98,13 @@ func IssuesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get query parameter for filtering
+	queryParam := r.URL.Query().Get("q")
+	state := "all"
+	if queryParam == "open" {
+		state = "open"
+	}
+
 	// Fetch repositories for user
 	repos, err := fetchUserRepositories(username)
 	if err != nil {
@@ -89,7 +121,7 @@ func IssuesHandler(w http.ResponseWriter, r *http.Request) {
 
 	for _, repo := range repos {
 		if repo.OpenIssuesCount > 0 {
-			issues, err := fetchRepositoryIssues(username, repo.Name)
+			issues, err := fetchRepositoryIssues(username, repo.Name, state)
 			if err != nil {
 				log.Printf("Error fetching issues for %s: %v", repo.Name, err)
 				continue
@@ -152,9 +184,9 @@ func fetchUserRepositories(username string) ([]GitHubRepo, error) {
 	return repos, nil
 }
 
-// fetchRepositoryIssues fetches all issues for a given repository
-func fetchRepositoryIssues(username, repoName string) ([]GitHubIssue, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues?state=all&per_page=100", username, repoName)
+// fetchRepositoryIssues fetches issues for a given repository
+func fetchRepositoryIssues(username, repoName, state string) ([]GitHubIssue, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues?state=%s&per_page=100", username, repoName, state)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -192,10 +224,111 @@ func fetchRepositoryIssues(username, repoName string) ([]GitHubIssue, error) {
 	return filteredIssues, nil
 }
 
+// PRHandler handles the pull requests endpoint
+func PRHandler(w http.ResponseWriter, r *http.Request) {
+	// Only allow GET method
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract username from URL path
+	path := strings.TrimPrefix(r.URL.Path, "/pr/")
+	username := strings.TrimSpace(path)
+
+	if username == "" || username == "/" {
+		http.Error(w, "Username is required", http.StatusBadRequest)
+		return
+	}
+
+	// Get query parameter for filtering
+	queryParam := r.URL.Query().Get("q")
+	state := "all"
+	if queryParam == "open" {
+		state = "open"
+	}
+
+	// Fetch repositories for user
+	repos, err := fetchUserRepositories(username)
+	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, fmt.Sprintf("Error fetching repositories: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Fetch pull requests for each repository
+	var reposWithPRs []RepositoryWithPRs
+
+	for _, repo := range repos {
+		prs, err := fetchRepositoryPullRequests(username, repo.Name, state)
+		if err != nil {
+			log.Printf("Error fetching pull requests for %s: %v", repo.Name, err)
+			continue
+		}
+
+		if len(prs) > 0 {
+			repoWithPRs := RepositoryWithPRs{
+				Name:         repo.Name,
+				FullName:     repo.FullName,
+				URL:          repo.HTMLURL,
+				Description:  repo.Description,
+				Stars:        repo.StargazersCount,
+				Forks:        repo.ForksCount,
+				PullRequests: prs,
+			}
+			reposWithPRs = append(reposWithPRs, repoWithPRs)
+		}
+	}
+
+	// Return JSON response
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(reposWithPRs); err != nil {
+		log.Printf("Error encoding JSON: %v", err)
+	}
+}
+
+// fetchRepositoryPullRequests fetches pull requests for a given repository
+func fetchRepositoryPullRequests(username, repoName, state string) ([]GitHubPullRequest, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/pulls?state=%s&per_page=100", username, repoName, state)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add User-Agent header (required by GitHub API)
+	req.Header.Set("User-Agent", "Go-Issues-Fetcher")
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+	}
+
+	var prs []GitHubPullRequest
+	if err := json.NewDecoder(resp.Body).Decode(&prs); err != nil {
+		return nil, err
+	}
+
+	return prs, nil
+}
+
 func main() {
 	http.HandleFunc("/", HelloHandler)
 	http.HandleFunc("/health", HealthHandler)
 	http.HandleFunc("/issues/", IssuesHandler)
+	http.HandleFunc("/pr/", PRHandler)
 
 	port := "8080"
 	log.Printf("Server starting on port %s...", port)

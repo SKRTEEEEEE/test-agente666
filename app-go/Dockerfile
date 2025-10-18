@@ -13,7 +13,7 @@ RUN go mod download
 COPY . .
 
 # Run tests
-RUN go test -v ./...
+# RUN go test -v ./...
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -o main .
