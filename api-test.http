@@ -1,0 +1,818 @@
+### AGENT666 SYSTEM - COMPLETE WORKFLOW TEST
+### Orchestrator Simulation
+### Description: End-to-end testing of all services working together
+
+########################################
+# ⚠️ IMPORTANT: NATS STREAMS ARCHITECTURE
+########################################
+#
+# There are TWO separate NATS streams in this system:
+#
+# 1. STREAM: TASKS (subjects: tasks.*)
+#    - Used by: queue-go ←→ queue-worker-go
+#    - Purpose: Legacy queue system (backward compatibility)
+#    - Subjects:
+#      * tasks.new - New task created
+#      * tasks.status - Task status updated
+#      * tasks.delete - Task deleted
+#
+# 2. STREAM: AGENT (subjects: agent.*)
+#    - Used by: orchestrator → agent-intel-go
+#    - Purpose: Intelligent task prioritization
+#    - Subjects:
+#      * agent.task.new - New task for prioritization
+#      * agent.pipeline.completed - Pipeline execution result
+#
+# ⚠️  PROBLEM: queue-go publishes to TASKS stream, NOT AGENT stream!
+#     Therefore, agent-intel-go will NOT receive events from queue-go.
+#
+# ✅  SOLUTION: Use one of these methods to create tasks in agent-intel:
+#
+#     METHOD 1 (Recommended): Use PowerShell helper script
+#       powershell -File create-agent-intel-task.ps1
+#
+#     METHOD 2: Direct MongoDB insertion (see PHASE 3A below)
+#
+#     METHOD 3: Publish to NATS AGENT stream directly
+#       (Requires nats-cli: https://github.com/nats-io/natscli)
+#       nats pub agent.task.new '{"task_id":"...","issue_id":"...",...}'
+#
+# 📝 For testing the FULL workflow with agent-intel-go:
+#    - Skip PHASE 3 (queue-go creation)
+#    - Use PHASE 3A (direct MongoDB insertion) instead
+#    - Then continue with PHASE 4+
+
+########################################
+# CONFIGURATION
+########################################
+@appGo = http://localhost:8083
+@queueGo = http://localhost:8081
+@agentIntel = http://localhost:8082
+@natsMonitoring = http://localhost:8222
+
+# Sample data
+@githubUser = SKRTEEEEEE
+@testRepo = /SKRTEEEEEE/test-agente666
+@testIssueId = 16
+@testTaskPath = /SKRTEEEEEE/test-agente666/docs/task/16-agent-intel.md
+
+########################################
+# PHASE 1: SYSTEM HEALTH CHECK
+########################################
+
+### 🔍 STEP 1.1: Check app-go (GitHub API Service)
+GET {{appGo}}/health
+
+###
+
+### 🔍 STEP 1.2: Check queue-go (Queue API Service)
+GET {{queueGo}}/health
+
+###
+
+### 🔍 STEP 1.3: Check agent-intel-go (Priority Service)
+GET {{agentIntel}}/health
+
+###
+
+### 🔍 STEP 1.4: Check NATS JetStream
+GET {{natsMonitoring}}/healthz
+
+###
+
+### 🔍 STEP 1.5: View NATS Streams Info
+GET {{natsMonitoring}}/jsz?streams=true
+
+###
+
+### ✅ PHASE 1 COMPLETE
+# All services should return healthy status
+# NATS should show AGENT and TASKS streams
+
+########################################
+# PHASE 2: DATA COLLECTION (GitHub)
+########################################
+
+### 📥 STEP 2.1: Fetch User's Open Issues from GitHub
+# This simulates the orchestrator discovering work to be done
+# Response will show repositories with open issues
+GET {{appGo}}/issues/{{githubUser}}?q=open
+
+###
+
+### 📥 STEP 2.2: Fetch User's Pull Requests
+# Additional context for task prioritization
+GET {{appGo}}/pr/{{githubUser}}?q=open
+
+###
+
+### ✅ PHASE 2 COMPLETE
+# Copy issue numbers from the response to create tasks
+# Example: If you see issue #16, #17, etc.
+
+########################################
+# PHASE 3A: CREATE TASKS IN AGENT-INTEL (RECOMMENDED)
+########################################
+#
+# ⚠️  IMPORTANT: This is the correct way to test agent-intel-go
+#
+# Since queue-go publishes to TASKS stream (not AGENT stream),
+# we need to create tasks directly in agent-intel-go's MongoDB.
+#
+# OPTION 1: Use PowerShell Helper Script (EASIEST)
+# ------------------------------------------------
+# Open a new terminal and run:
+#   cd C:\Users\Laptop\code\agente666\test-agente666
+#   powershell -ExecutionPolicy Bypass -File create-agent-intel-task.ps1
+#
+# The script will:
+# - Generate a unique task ID
+# - Insert the task into MongoDB (agent_intel.pending_tasks)
+# - Display the task ID for testing
+#
+# Run it multiple times to create multiple tasks!
+#
+# OPTION 2: Manual MongoDB Insertion (see steps below)
+# -----------------------------------------------------
+
+### 📝 STEP 3A.1: Create Task 1 - Manual MongoDB Insert
+# Copy this command and run in terminal:
+# docker exec agent666-mongodb mongosh agent_intel --quiet --eval "db.pending_tasks.insertOne({task_id:'task-manual-001',issue_id:'16',repository:'/SKRTEEEEEE/test-agente666',task_file_path:'/SKRTEEEEEE/test-agente666/docs/task/16-task.md',created_at:new Date(),last_success_at:null,avg_runtime_ms:0,pending_tasks_count:1,size_bytes:2048,status:'pending',assigned_at:null})"
+
+###
+
+### 📝 STEP 3A.2: Create Task 2 - Different Repo
+# docker exec agent666-mongodb mongosh agent_intel --quiet --eval "db.pending_tasks.insertOne({task_id:'task-manual-002',issue_id:'42',repository:'/octocat/Hello-World',task_file_path:'/octocat/Hello-World/docs/task/42-feature.md',created_at:new Date(),last_success_at:null,avg_runtime_ms:0,pending_tasks_count:1,size_bytes:3072,status:'pending',assigned_at:null})"
+
+###
+
+### 📝 STEP 3A.3: Create Task 3 - Another Repo
+# docker exec agent666-mongodb mongosh agent_intel --quiet --eval "db.pending_tasks.insertOne({task_id:'task-manual-003',issue_id:'123',repository:'/torvalds/linux',task_file_path:'/torvalds/linux/docs/task/123-bugfix.md',created_at:new Date(),last_success_at:null,avg_runtime_ms:0,pending_tasks_count:1,size_bytes:4096,status:'pending',assigned_at:null})"
+
+###
+
+### 📝 STEP 3A.4: Verify Tasks Were Created
+GET {{agentIntel}}/api/v1/queue/status
+
+###
+
+### 📝 STEP 3A.5: View System Metrics
+GET {{agentIntel}}/api/v1/metrics
+
+###
+
+### ✅ PHASE 3A COMPLETE
+# Tasks should now be visible in agent-intel-go
+# Expected: 3 pending tasks (or more if you ran the PowerShell script)
+# 
+# 📝 Task IDs for testing:
+# - task-manual-001
+# - task-manual-002  
+# - task-manual-003
+# (Or use the task ID from PowerShell script output)
+
+########################################
+# PHASE 3B: TASK CREATION VIA QUEUE-GO (LEGACY)
+########################################
+#
+# ⚠️  NOTE: This creates tasks in queue-go, NOT agent-intel-go!
+#    These tasks will be consumed by queue-worker-go.
+#    They will NOT appear in agent-intel-go.
+#
+# Use this if you want to test the legacy queue system.
+
+### 📝 STEP 3.1: Publish Task Event to NATS (agent.task.new)
+# In production, orchestrator publishes directly to NATS
+# For testing, we'll use queue-go API which publishes to NATS
+#
+# This simulates: orchestrator → NATS → agent-intel-go
+POST {{queueGo}}/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "{{testIssueId}}",
+  "repository": "{{testRepo}}",
+  "task_file_path": "{{testTaskPath}}"
+}
+
+###
+
+### 📝 STEP 3.2: Create Additional Test Tasks (Different Repos)
+POST {{queueGo}}/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "42",
+  "repository": "/octocat/Hello-World",
+  "task_file_path": "/octocat/Hello-World/docs/task/42-feature.md"
+}
+
+###
+
+POST {{queueGo}}/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "123",
+  "repository": "/torvalds/linux",
+  "task_file_path": "/torvalds/linux/docs/task/123-bugfix.md"
+}
+
+###
+
+POST {{queueGo}}/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "17",
+  "repository": "{{testRepo}}",
+  "task_file_path": "{{testRepo}}/docs/task/17-second-issue.md"
+}
+
+###
+
+### 📝 STEP 3.3: Verify Tasks in Queue-Go
+# Check that tasks were created and published to NATS
+GET {{queueGo}}/api/queue/status
+
+###
+
+### 📝 STEP 3.4: List All Tasks in Queue-Go
+GET {{queueGo}}/api/tasks
+
+###
+
+### ✅ PHASE 3 COMPLETE
+# Tasks published to NATS (tasks.new)
+# Agent-intel-go should have consumed events and stored in MongoDB
+# Expected: 4 tasks created
+
+########################################
+# PHASE 4: AGENT INTEL CONSUMPTION
+########################################
+
+### 🧠 STEP 4.1: Verify Agent Intel Received Events
+# Check that agent-intel-go consumed NATS events
+# Tasks should now be in MongoDB pending_tasks collection
+GET {{agentIntel}}/api/v1/queue/status
+
+###
+
+### 🧠 STEP 4.2: View System Metrics
+# See how many tasks are pending, completed, failed
+GET {{agentIntel}}/api/v1/metrics
+
+###
+
+### 🧠 STEP 4.3: Get Highest Priority Task
+# Agent Intel calculates scores for all pending tasks
+# Returns task with highest priority (0-1 score)
+GET {{agentIntel}}/api/v1/queue/next
+
+###
+
+### 🧠 STEP 4.4: Get Priority Task for Specific Repo
+GET {{agentIntel}}/api/v1/queue/next?repo_id={{testRepo}}
+
+###
+
+### ✅ PHASE 4 COMPLETE
+# Agent Intel has consumed NATS events
+# Tasks are stored in MongoDB with metrics
+# Priority scores calculated
+# Copy task_id from Step 4.3 response for next phase
+
+########################################
+# PHASE 5: TASK EXECUTION SIMULATION
+########################################
+
+### ⚙️ STEP 5.1: Simulate Orchestrator Getting Next Task
+# This is what the orchestrator would call to get work
+GET {{agentIntel}}/api/v1/queue/next
+
+###
+
+### 📋 STEP 5.2: Copy Task ID from Response
+# From the response above, copy the "task_id" field
+# Example: "task-abc-123-def-456"
+@executingTaskId = COPY_TASK_ID_FROM_STEP_5_1_HERE
+
+###
+
+### ⚙️ STEP 5.3: Mark Task as In Progress (via queue-go)
+# Orchestrator updates status when starting execution
+PATCH {{queueGo}}/api/tasks/{{executingTaskId}}/status
+Content-Type: application/json
+
+{
+  "status": "in_progress"
+}
+
+###
+
+### ⚙️ STEP 5.4: Verify Task Status Changed
+GET {{queueGo}}/api/queue/status
+
+###
+
+### ⏱️ STEP 5.5: Simulate Task Processing Time
+# In real workflow, orchestrator would:
+# 1. Clone repository
+# 2. Read task file
+# 3. Execute Agent666 CLI
+# 4. Measure runtime
+# 5. Publish completion event
+#
+# For testing, we skip to completion (wait ~10 seconds if you want realistic timing)
+
+###
+
+### ⚙️ STEP 5.6: Mark Task as Completed
+# Orchestrator publishes completion to NATS
+PATCH {{queueGo}}/api/tasks/{{executingTaskId}}/status
+Content-Type: application/json
+
+{
+  "status": "completed"
+}
+
+###
+
+### ⚙️ STEP 5.7: Verify Completion in Queue
+GET {{queueGo}}/api/queue/status
+
+###
+
+### ⚙️ STEP 5.8: Verify Completion in Agent Intel
+# Agent Intel should have moved task to history
+GET {{agentIntel}}/api/v1/metrics
+
+###
+
+### ✅ PHASE 5 COMPLETE
+# Task retrieved from priority queue
+# Task executed (simulated)
+# Task marked as completed
+# Metrics updated
+
+########################################
+# PHASE 6: ADVANCED - PIPELINE COMPLETION EVENT
+########################################
+
+### 🎯 STEP 6.1: Get Next Priority Task
+GET {{agentIntel}}/api/v1/queue/next
+
+###
+
+### 📋 STEP 6.2: Copy Second Task ID
+@secondTaskId = COPY_TASK_ID_FROM_STEP_6_1_HERE
+
+###
+
+### 🎯 STEP 6.3: Simulate Pipeline Execution
+# Mark as in progress
+PATCH {{queueGo}}/api/tasks/{{secondTaskId}}/status
+Content-Type: application/json
+
+{
+  "status": "in_progress"
+}
+
+###
+
+### 🎯 STEP 6.4: Simulate Pipeline Failure
+# Test failure handling
+PATCH {{queueGo}}/api/tasks/{{secondTaskId}}/status
+Content-Type: application/json
+
+{
+  "status": "failed"
+}
+
+###
+
+### 🎯 STEP 6.5: Check Metrics After Failure
+# Failed count should increase
+GET {{agentIntel}}/api/v1/metrics
+
+###
+
+### ✅ PHASE 6 COMPLETE
+# Demonstrated both success and failure paths
+# Metrics update correctly for failed tasks
+
+########################################
+# PHASE 7: TASK CANCELLATION
+########################################
+
+### ❌ STEP 7.1: Get Another Task
+GET {{agentIntel}}/api/v1/queue/next
+
+###
+
+### 📋 STEP 7.2: Copy Task ID to Cancel
+@cancelTaskId = COPY_TASK_ID_FROM_STEP_7_1_HERE
+
+###
+
+### ❌ STEP 7.3: Cancel Task via Agent Intel
+POST {{agentIntel}}/api/v1/tasks/cancel
+Content-Type: application/json
+
+{
+  "task_id": "{{cancelTaskId}}",
+  "reason": "User requested cancellation - testing workflow"
+}
+
+###
+
+### ❌ STEP 7.4: Verify Task Removed from Queue
+GET {{agentIntel}}/api/v1/queue/status
+
+###
+
+### ✅ PHASE 7 COMPLETE
+# Cancellation workflow tested
+# Task removed from pending queue
+
+########################################
+# PHASE 8: MONITORING & VERIFICATION
+########################################
+
+### 📊 STEP 8.1: Final Queue Status (queue-go)
+GET {{queueGo}}/api/queue/status
+
+###
+
+### 📊 STEP 8.2: Final Queue Status (agent-intel)
+GET {{agentIntel}}/api/v1/queue/status
+
+###
+
+### 📊 STEP 8.3: Final System Metrics
+GET {{agentIntel}}/api/v1/metrics
+
+###
+
+### 📊 STEP 8.4: Check NATS Message Stats
+GET {{natsMonitoring}}/jsz?streams=true
+
+###
+
+### 📊 STEP 8.5: Check NATS Consumers
+GET {{natsMonitoring}}/jsz?consumers=true
+
+###
+
+### 📊 STEP 8.6: View All Tasks in Queue-Go
+GET {{queueGo}}/api/tasks
+
+###
+
+### ✅ PHASE 8 COMPLETE
+# Full system state reviewed
+# All metrics verified
+
+########################################
+# PHASE 9: BATCH PROCESSING TEST
+########################################
+
+### 🚀 STEP 9.1: Create Multiple Tasks Quickly
+POST {{queueGo}}/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "201",
+  "repository": "/batch/repo1",
+  "task_file_path": "/batch/repo1/docs/task/201.md"
+}
+
+###
+
+POST {{queueGo}}/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "202",
+  "repository": "/batch/repo1",
+  "task_file_path": "/batch/repo1/docs/task/202.md"
+}
+
+###
+
+POST {{queueGo}}/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "203",
+  "repository": "/batch/repo2",
+  "task_file_path": "/batch/repo2/docs/task/203.md"
+}
+
+###
+
+POST {{queueGo}}/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "204",
+  "repository": "/batch/repo2",
+  "task_file_path": "/batch/repo2/docs/task/204.md"
+}
+
+###
+
+POST {{queueGo}}/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "205",
+  "repository": "/batch/repo3",
+  "task_file_path": "/batch/repo3/docs/task/205.md"
+}
+
+###
+
+### 🚀 STEP 9.2: Wait for Agent Intel to Process
+# Give time for NATS events to be consumed (1-2 seconds)
+# Then check queue status
+
+###
+
+### 🚀 STEP 9.3: View All Tasks by Repository
+GET {{agentIntel}}/api/v1/queue/status
+
+###
+
+### 🚀 STEP 9.4: Get Next Task (Should prioritize correctly)
+GET {{agentIntel}}/api/v1/queue/next
+
+###
+
+### 🚀 STEP 9.5: Get Next Task for Batch Repo1
+GET {{agentIntel}}/api/v1/queue/next?repo_id=/batch/repo1
+
+###
+
+### 🚀 STEP 9.6: Get Next Task for Batch Repo2
+GET {{agentIntel}}/api/v1/queue/next?repo_id=/batch/repo2
+
+###
+
+### ✅ PHASE 9 COMPLETE
+# Batch creation tested
+# Priority scoring works across multiple repos
+# Repo filtering works correctly
+
+########################################
+# PHASE 10: CLEANUP & RESET
+########################################
+
+### 🧹 STEP 10.1: List All Tasks to Clean
+GET {{queueGo}}/api/tasks
+
+###
+
+### 🧹 STEP 10.2: Delete Tasks One by One
+# Copy task IDs from Step 10.1 and delete them
+@cleanupTaskId1 = TASK_ID_1_HERE
+DELETE {{queueGo}}/api/tasks/{{cleanupTaskId1}}
+
+###
+
+@cleanupTaskId2 = TASK_ID_2_HERE
+DELETE {{queueGo}}/api/tasks/{{cleanupTaskId2}}
+
+###
+
+@cleanupTaskId3 = TASK_ID_3_HERE
+DELETE {{queueGo}}/api/tasks/{{cleanupTaskId3}}
+
+###
+
+### 🧹 STEP 10.3: Verify Queue is Empty
+GET {{queueGo}}/api/queue/status
+
+###
+
+GET {{agentIntel}}/api/v1/queue/status
+
+###
+
+### ✅ PHASE 10 COMPLETE
+# System cleaned up
+# Ready for next test run
+
+########################################
+# 🎉 COMPLETE WORKFLOW SUMMARY
+########################################
+
+### WORKFLOW EXECUTION ORDER:
+#
+# 1. ✅ HEALTH CHECK (Steps 1.1-1.5)
+#    - Verified all services running
+#    - NATS streams configured
+#
+# 2. ✅ DATA COLLECTION (Steps 2.1-2.2)
+#    - Fetched GitHub issues via app-go
+#    - Identified work to be done
+#
+# 3. ✅ TASK CREATION (Steps 3.1-3.4)
+#    - Created tasks via queue-go API
+#    - Tasks published to NATS (tasks.new)
+#    - Verified in queue-go
+#
+# 4. ✅ AGENT INTEL CONSUMPTION (Steps 4.1-4.4)
+#    - Agent-intel-go consumed NATS events (agent.task.new)
+#    - Tasks stored in MongoDB pending_tasks
+#    - Priority scores calculated
+#    - Highest priority task retrieved
+#
+# 5. ✅ TASK EXECUTION (Steps 5.1-5.8)
+#    - Orchestrator got highest priority task
+#    - Marked as in_progress
+#    - Simulated processing
+#    - Marked as completed
+#    - Metrics updated
+#
+# 6. ✅ FAILURE HANDLING (Steps 6.1-6.5)
+#    - Task marked as failed
+#    - Failure metrics updated
+#
+# 7. ✅ CANCELLATION (Steps 7.1-7.4)
+#    - Task cancelled via agent-intel API
+#    - Removed from pending queue
+#
+# 8. ✅ MONITORING (Steps 8.1-8.6)
+#    - All metrics verified
+#    - NATS streams checked
+#    - System state confirmed
+#
+# 9. ✅ BATCH PROCESSING (Steps 9.1-9.6)
+#    - Multiple tasks created
+#    - Priority across repos tested
+#    - Repo filtering verified
+#
+# 10. ✅ CLEANUP (Steps 10.1-10.3)
+#     - Tasks deleted
+#     - System reset
+
+########################################
+# SYSTEM ARCHITECTURE FLOW
+########################################
+#
+#  ┌─────────────────────────────────────────────────────┐
+#  │              ORCHESTRATOR (You)                     │
+#  └───────┬─────────────────────────────────────┬───────┘
+#          │                                     │
+#          ▼                                     ▼
+#  ┌──────────────┐                    ┌──────────────┐
+#  │   app-go     │                    │  queue-go    │
+#  │  GitHub API  │                    │  Queue API   │
+#  │   :8083      │                    │   :8081      │
+#  └──────────────┘                    └──────┬───────┘
+#                                             │
+#                                             ▼
+#                                     ┌──────────────┐
+#                                     │     NATS     │
+#                                     │  JetStream   │
+#                                     │   :4222      │
+#                                     └──────┬───────┘
+#                                            │
+#          ┌─────────────────────────────────┤
+#          │                                 │
+#          ▼                                 ▼
+#  ┌──────────────┐                 ┌──────────────┐
+#  │ queue-worker │                 │ agent-intel  │
+#  │   Consumer   │                 │   Service    │
+#  │              │                 │   :8082      │
+#  └──────────────┘                 └──────┬───────┘
+#                                          │
+#                                          ▼
+#                                   ┌──────────────┐
+#                                   │   MongoDB    │
+#                                   │   :27017     │
+#                                   └──────────────┘
+
+########################################
+# KEY NATS EVENTS
+########################################
+#
+# Stream: TASKS
+# - tasks.new: Created by queue-go → Consumed by queue-worker
+# - tasks.status: Status updates
+# - tasks.delete: Task deletions
+#
+# Stream: AGENT
+# - agent.task.new: Created by orchestrator → Consumed by agent-intel
+# - agent.pipeline.completed: Pipeline results → Consumed by agent-intel
+
+########################################
+# MONGODB COLLECTIONS
+########################################
+#
+# Database: agent_intel
+#
+# Collection: pending_tasks
+# - Active tasks waiting for execution
+# - Contains metrics for prioritization
+# - Updated by agent-intel-go consumer
+#
+# Collection: task_history
+# - Completed/failed tasks
+# - Used for calculating avg_runtime_ms
+# - Used for last_success_at timestamps
+
+########################################
+# PRIORITY SCORING (5 Metrics)
+########################################
+#
+# Age (35%): How long task has been pending
+#   - Normalized: 0 hours = 0.0, 7 days = 1.0
+#   - Older tasks get higher priority
+#
+# Recent Activity (25%): When repo last succeeded
+#   - Normalized: Now = 1.0, 7 days ago = 0.0
+#   - Active repos get higher priority
+#
+# Runtime (20%): Average execution time
+#   - Normalized: 0ms = 1.0, 40min = 0.0
+#   - Faster tasks get higher priority
+#
+# Load (10%): Number of pending tasks for repo
+#   - Normalized: 0 tasks = 1.0, 10 tasks = 0.0
+#   - Less busy repos get higher priority
+#
+# Size (10%): Task file size
+#   - Normalized: 0KB = 1.0, 1MB = 0.0
+#   - Smaller tasks get higher priority
+#
+# Final Score = (Age × 0.35) + (Activity × 0.25) + 
+#               (Runtime × 0.20) + (Load × 0.10) + 
+#               (Size × 0.10)
+
+########################################
+# TESTING TIPS
+########################################
+#
+# 1. Run services first:
+#    docker-compose up -d
+#
+# 2. Wait for services to be ready (~10 seconds)
+#
+# 3. Execute phases in order (1 → 10)
+#
+# 4. Copy/paste task IDs as instructed
+#
+# 5. Check logs if issues:
+#    docker-compose logs -f agent-intel-go
+#    docker-compose logs -f queue-go
+#    docker-compose logs -f queue-worker-go
+#
+# 6. MongoDB inspection:
+#    docker exec -it agent666-mongodb mongosh
+#    use agent_intel
+#    db.pending_tasks.find()
+#    db.task_history.find()
+#
+# 7. NATS inspection:
+#    Open http://localhost:8222 in browser
+#
+# 8. Reset between tests:
+#    docker-compose down -v
+#    docker-compose up -d
+
+########################################
+# EXPECTED RESULTS
+########################################
+#
+# After completing all phases:
+# ✅ All services healthy
+# ✅ Tasks created and published to NATS
+# ✅ Agent Intel consumed events and stored in MongoDB
+# ✅ Priority scoring working correctly
+# ✅ Tasks executed (marked completed/failed)
+# ✅ Cancellation working
+# ✅ Batch processing working
+# ✅ Metrics accurate
+# ✅ NATS streams showing message counts
+# ✅ MongoDB showing task data
+# ✅ System cleaned up
+
+########################################
+# NEXT STEPS
+########################################
+#
+# After validating this workflow:
+# 1. Build real orchestrator CLI/service
+# 2. Implement actual Agent666 task execution
+# 3. Add real GitHub webhook integration
+# 4. Implement retry logic for failed tasks
+# 5. Add Prometheus metrics
+# 6. Create Grafana dashboards
+# 7. Add distributed tracing (Jaeger)
+# 8. Scale workers horizontally
+# 9. Add authentication/authorization
+# 10. Production deployment
+
+###
