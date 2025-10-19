@@ -73,7 +73,7 @@ func TestIssuesHandler(t *testing.T) {
 	if rr.Code != http.StatusOK && rr.Code != http.StatusNotFound && rr.Code != http.StatusInternalServerError {
 		t.Errorf("Unexpected status code: %d", rr.Code)
 	}
-	
+
 	if rr.Code == http.StatusOK {
 		assert.Contains(t, rr.Header().Get("Content-Type"), "application/json", "Should return JSON content type")
 	}
@@ -332,7 +332,7 @@ func TestPRHandlerWithRepository(t *testing.T) {
 	if rr.Code != http.StatusOK && rr.Code != http.StatusNotFound && rr.Code != http.StatusInternalServerError {
 		t.Errorf("Unexpected status code: %d", rr.Code)
 	}
-	
+
 	// If successful, should return JSON
 	if rr.Code == http.StatusOK {
 		assert.Contains(t, rr.Header().Get("Content-Type"), "application/json", "Should return JSON content type")
@@ -354,7 +354,7 @@ func TestPRHandlerWithRepositoryAndQueryParam(t *testing.T) {
 	if rr.Code != http.StatusOK && rr.Code != http.StatusNotFound && rr.Code != http.StatusInternalServerError {
 		t.Errorf("Unexpected status code: %d", rr.Code)
 	}
-	
+
 	// If successful, should return JSON
 	if rr.Code == http.StatusOK {
 		assert.Contains(t, rr.Header().Get("Content-Type"), "application/json", "Should return JSON content type")

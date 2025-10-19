@@ -1,0 +1,32 @@
+services:
+  # GitHub API service
+  app-go:
+    build:
+      context: ./app-go
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+    container_name: agent666-app-go
+    networks:
+      - agent666-network
+    restart: unless-stopped
+
+  # Queue service
+  queue-go:
+    build:
+      context: ./queue-go
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      - PORT=8081
+    container_name: agent666-queue-go
+    networks:
+      - agent666-network
+    restart: unless-stopped
+
+networks:
+  agent666-network:
+    driver: bridge

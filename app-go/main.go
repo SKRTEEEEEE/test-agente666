@@ -209,7 +209,7 @@ func fetchRepositoryInfo(username, repoName string) (*GitHubRepo, error) {
 
 	req.Header.Set("User-Agent", "Go-Issues-Fetcher")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	
+
 	// Add authentication token if available
 	if githubToken != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("token %s", githubToken))
@@ -247,7 +247,7 @@ func fetchUserRepositories(username string) ([]GitHubRepo, error) {
 	// Add User-Agent header (required by GitHub API)
 	req.Header.Set("User-Agent", "Go-Issues-Fetcher")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	
+
 	// Add authentication token if available
 	if githubToken != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("token %s", githubToken))
@@ -285,7 +285,7 @@ func fetchRepositoryIssues(username, repoName, state string) ([]GitHubIssue, err
 	// Add User-Agent header (required by GitHub API)
 	req.Header.Set("User-Agent", "Go-Issues-Fetcher")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	
+
 	// Add authentication token if available
 	if githubToken != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("token %s", githubToken))
@@ -441,7 +441,7 @@ func fetchRepositoryPullRequests(username, repoName, state string) ([]GitHubPull
 	// Add User-Agent header (required by GitHub API)
 	req.Header.Set("User-Agent", "Go-Issues-Fetcher")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	
+
 	// Add authentication token if available
 	if githubToken != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("token %s", githubToken))

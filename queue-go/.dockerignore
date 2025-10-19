@@ -1,0 +1,13 @@
+# Ignore test files during Docker build (but they're still run in the build stage)
+*.md
+.git
+.gitignore
+.env
+*.exe
+
+# IDE files
+.vscode
+.idea
+*.swp
+*.swo
+*~
