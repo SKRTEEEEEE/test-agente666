@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	natsClient "queue-go/nats"
 )
 
 // CreateTaskRequest represents the request to create a task
@@ -64,7 +65,7 @@ func ListTasksHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(tasks)
 }
 
-// CreateTaskHandler creates a new task and adds it to the queue
+// CreateTaskHandler creates a new task and publishes it to NATS
 func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	var req CreateTaskRequest
 
@@ -90,8 +91,21 @@ func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:    time.Now(),
 	}
 
-	// Add to queue
+	// Add to local queue for caching
 	taskQueue.Enqueue(task)
+
+	// Publish to NATS JetStream
+	if nats != nil && nats.IsConnected() {
+		taskMsg := convertTaskToNATSMessage(task)
+		if err := nats.PublishNewTask(taskMsg); err != nil {
+			log.Printf("Failed to publish task to NATS: %v", err)
+			http.Error(w, "Failed to publish task to message queue", http.StatusInternalServerError)
+			return
+		}
+		log.Printf("Task published to NATS: ID=%s, IssueID=%s, Repository=%s", task.ID, task.IssueID, task.Repository)
+	} else {
+		log.Printf("NATS not connected, task only added to local queue")
+	}
 
 	log.Printf("Task created: ID=%s, IssueID=%s, Repository=%s", task.ID, task.IssueID, task.Repository)
 
@@ -117,7 +131,7 @@ func GetTaskHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(task)
 }
 
-// UpdateTaskStatusHandler updates the status of a task
+// UpdateTaskStatusHandler updates the status of a task and publishes update event
 func UpdateTaskStatusHandler(w http.ResponseWriter, r *http.Request) {
 	// Extract task ID from URL path
 	path := strings.TrimPrefix(r.URL.Path, "/api/tasks/")
@@ -152,6 +166,20 @@ func UpdateTaskStatusHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Publish status update to NATS
+	if nats != nil && nats.IsConnected() {
+		statusUpdate := &natsClient.StatusUpdateMessage{
+			TaskID:    taskID,
+			Status:    req.Status,
+			UpdatedAt: time.Now(),
+		}
+		if err := nats.PublishTaskStatusUpdate(statusUpdate); err != nil {
+			log.Printf("Failed to publish status update to NATS: %v", err)
+		} else {
+			log.Printf("Task status update published to NATS: ID=%s, Status=%s", taskID, req.Status)
+		}
+	}
+
 	// Get updated task
 	task := taskQueue.GetTaskByID(taskID)
 
@@ -162,7 +190,7 @@ func UpdateTaskStatusHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(task)
 }
 
-// DeleteTaskHandler removes a task from the queue
+// DeleteTaskHandler removes a task from the queue and publishes delete event
 func DeleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 	// Extract task ID from URL path
 	path := strings.TrimPrefix(r.URL.Path, "/api/tasks/")
@@ -174,7 +202,30 @@ func DeleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Publish delete event to NATS
+	if nats != nil && nats.IsConnected() {
+		if err := nats.PublishTaskDelete(taskID); err != nil {
+			log.Printf("Failed to publish delete event to NATS: %v", err)
+		} else {
+			log.Printf("Task delete event published to NATS: ID=%s", taskID)
+		}
+	}
+
 	log.Printf("Task deleted: ID=%s", taskID)
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// convertTaskToNATSMessage converts Task to NATS TaskMessage
+func convertTaskToNATSMessage(task *Task) *natsClient.TaskMessage {
+	return &natsClient.TaskMessage{
+		ID:           task.ID,
+		IssueID:      task.IssueID,
+		Repository:   task.Repository,
+		TaskFilePath: task.TaskFilePath,
+		Status:       task.Status,
+		CreatedAt:    task.CreatedAt,
+		UpdatedAt:    task.UpdatedAt,
+		ErrorMessage: task.ErrorMessage,
+	}
 }
