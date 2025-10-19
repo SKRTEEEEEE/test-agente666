@@ -1,0 +1,365 @@
+### Agent Intel Service - API Tests
+### Base URL: http://localhost:8082
+### Description: Intelligent task prioritization with MongoDB + NATS
+
+########################################
+# VARIABLES - Pre-configured IDs
+########################################
+@baseUrl = http://localhost:8082
+@sampleTaskId1 = task-sample-abc-123
+@sampleTaskId2 = task-sample-def-456
+@sampleRepo1 = /SKRTEEEEEE/test-agente666
+@sampleRepo2 = /octocat/Hello-World
+
+########################################
+# 1. HEALTH & STATUS CHECKS
+########################################
+
+### Health Check (Verifies MongoDB + NATS connectivity)
+GET {{baseUrl}}/health
+
+###
+
+### Get System Metrics
+# Returns: total_pending, total_processing, total_completed, total_failed, avg_runtime_ms
+GET {{baseUrl}}/api/v1/metrics
+
+###
+
+### Get Queue Status
+# Returns: total tasks grouped by repository and status
+GET {{baseUrl}}/api/v1/queue/status
+
+###
+
+########################################
+# 2. TASK PRIORITIZATION - CORE FEATURE
+########################################
+
+### Get Next Task (Highest Priority - No Filter)
+# Uses 5-metric scoring:
+# - Age (35%): Older tasks = higher priority
+# - Recent Activity (25%): Active repos = higher priority
+# - Runtime (20%): Faster tasks = higher priority
+# - Load (10%): Less busy repos = higher priority
+# - Size (10%): Smaller tasks = higher priority
+GET {{baseUrl}}/api/v1/queue/next
+
+###
+
+### Get Next Task (Filter by Repository)
+# Only returns tasks from specific repository
+GET {{baseUrl}}/api/v1/queue/next?repo_id={{sampleRepo1}}
+
+###
+
+### Get Next Task (Different Repository)
+GET {{baseUrl}}/api/v1/queue/next?repo_id={{sampleRepo2}}
+
+###
+
+########################################
+# 3. TASK MANAGEMENT
+########################################
+
+### Cancel a Task (Pre-configured ID)
+# Mark task as cancelled with reason
+POST {{baseUrl}}/api/v1/tasks/cancel
+Content-Type: application/json
+
+{
+  "task_id": "{{sampleTaskId1}}",
+  "reason": "Manual cancellation for testing"
+}
+
+###
+
+### Cancel Task (Custom ID)
+# Replace TASK_ID_HERE with actual task ID from queue
+@customTaskId = TASK_ID_HERE
+POST {{baseUrl}}/api/v1/tasks/cancel
+Content-Type: application/json
+
+{
+  "task_id": "{{customTaskId}}",
+  "reason": "User requested cancellation"
+}
+
+###
+
+########################################
+# 4. ERROR TESTING
+########################################
+
+### Error: Cancel Non-existent Task
+POST {{baseUrl}}/api/v1/tasks/cancel
+Content-Type: application/json
+
+{
+  "task_id": "non-existent-task-id-12345",
+  "reason": "Testing error handling"
+}
+
+###
+
+### Error: Cancel Without Reason
+POST {{baseUrl}}/api/v1/tasks/cancel
+Content-Type: application/json
+
+{
+  "task_id": "{{sampleTaskId1}}"
+}
+
+###
+
+### Error: Invalid JSON
+POST {{baseUrl}}/api/v1/tasks/cancel
+Content-Type: application/json
+
+{
+  "task_id": "test"
+  "missing_comma": true
+}
+
+###
+
+### Error: Get Next Task with Invalid Repo
+GET {{baseUrl}}/api/v1/queue/next?repo_id=
+
+###
+
+########################################
+# 5. COMPLETE WORKFLOW - INTELLIGENT PRIORITIZATION
+########################################
+
+### ✅ WORKFLOW STEP 1: Verify Service Health
+# Check MongoDB and NATS connections
+GET {{baseUrl}}/health
+
+###
+
+### ✅ WORKFLOW STEP 2: Check Initial System State
+# View current metrics: pending, processing, completed, failed
+GET {{baseUrl}}/api/v1/metrics
+
+###
+
+### ✅ WORKFLOW STEP 3: View Queue Status
+# See tasks grouped by repository and status
+GET {{baseUrl}}/api/v1/queue/status
+
+###
+
+### ✅ WORKFLOW STEP 4: Get Highest Priority Task (All Repos)
+# Agent Intel calculates score for each pending task
+# Returns task with highest priority score (0-1)
+# Response includes:
+# - task: full task details with metrics
+# - score: calculated priority (higher = more urgent)
+GET {{baseUrl}}/api/v1/queue/next
+
+###
+
+### ✅ WORKFLOW STEP 5: Examine Priority Score Breakdown
+# The response from Step 4 includes a "score" field
+# Example interpretation:
+# - Score 0.85-1.0: URGENT (old task, active repo, fast runtime)
+# - Score 0.60-0.84: HIGH (moderately old, recent activity)
+# - Score 0.40-0.59: MEDIUM (balanced metrics)
+# - Score 0.20-0.39: LOW (new task, slow runtime, busy repo)
+# - Score 0.0-0.19: LOWEST (new task, inactive repo)
+
+###
+
+### ✅ WORKFLOW STEP 6: Get Next Task for Specific Repo
+# Filter to only get tasks from SKRTEEEEEE/test-agente666
+GET {{baseUrl}}/api/v1/queue/next?repo_id=/SKRTEEEEEE/test-agente666
+
+###
+
+### ✅ WORKFLOW STEP 7: Simulate Task Assignment
+# In real workflow, orchestrator would:
+# 1. Get next task (Step 4)
+# 2. Copy task_id from response
+# 3. Execute pipeline on the task
+# 4. Publish completion event to NATS
+#
+# For this test, copy a task_id from Step 4 response:
+@assignedTaskId = COPY_TASK_ID_FROM_STEP_4
+
+###
+
+### ✅ WORKFLOW STEP 8: View Updated Metrics
+# After orchestrator processes task, metrics update automatically
+# Expected changes:
+# - total_pending decreases
+# - total_completed or total_failed increases
+# - avg_runtime_ms updates
+GET {{baseUrl}}/api/v1/metrics
+
+###
+
+### ✅ WORKFLOW STEP 9: View Updated Queue Status
+# Queue status reflects current state after processing
+GET {{baseUrl}}/api/v1/queue/status
+
+###
+
+### ✅ WORKFLOW STEP 10: Optional - Cancel a Task
+# If task needs to be cancelled before processing
+POST {{baseUrl}}/api/v1/tasks/cancel
+Content-Type: application/json
+
+{
+  "task_id": "{{assignedTaskId}}",
+  "reason": "Testing cancellation workflow"
+}
+
+###
+
+### ✅ WORKFLOW STEP 11: Verify Cancellation
+# Metrics should show cancelled task removed from pending
+GET {{baseUrl}}/api/v1/metrics
+
+###
+
+### ✅ WORKFLOW COMPLETE
+# Expected Flow:
+# 1. Service health verified (MongoDB + NATS connected)
+# 2. Initial system state captured (metrics baseline)
+# 3. Queue status shows distribution of tasks
+# 4. Highest priority task retrieved with calculated score
+# 5. Score interpretation helps understand urgency
+# 6. Repo-specific task retrieval works
+# 7. Task assignment simulated
+# 8. Metrics update after task processing
+# 9. Queue status reflects changes
+# 10. Task cancellation capability demonstrated
+# 11. Final state verified
+#
+# Key Events (NATS):
+# - agent.task.new: Published by orchestrator → Consumed by Agent Intel
+# - agent.pipeline.completed: Published by orchestrator → Consumed by Agent Intel
+#
+# MongoDB Collections:
+# - pending_tasks: Active tasks with metrics (age, runtime, load, size)
+# - task_history: Completed/failed tasks for calculating averages
+#
+# Scoring Engine (5 Metrics):
+# ┌─────────────────┬────────┬──────────────────────────────────┐
+# │ Metric          │ Weight │ Description                      │
+# ├─────────────────┼────────┼──────────────────────────────────┤
+# │ Age             │ 35%    │ Time since task creation         │
+# │ Recent Activity │ 25%    │ Last successful repo execution   │
+# │ Runtime         │ 20%    │ Average execution time           │
+# │ Load            │ 10%    │ Pending tasks for repo           │
+# │ Size            │ 10%    │ Task file size                   │
+# └─────────────────┴────────┴──────────────────────────────────┘
+#
+# Example Score Calculation:
+# Task A: Created 2 days ago, repo executed 1h ago, 5sec runtime, 1 pending, 50KB
+# → Age: 0.28, Activity: 0.98, Runtime: 0.99, Load: 0.90, Size: 0.95
+# → Score: (0.28×0.35) + (0.98×0.25) + (0.99×0.20) + (0.90×0.10) + (0.95×0.10)
+# → Score: 0.098 + 0.245 + 0.198 + 0.090 + 0.095 = 0.726 (HIGH PRIORITY)
+#
+# Integration with Full System:
+# 1. Orchestrator publishes agent.task.new to NATS
+# 2. Agent Intel consumes and stores in MongoDB (pending_tasks)
+# 3. Orchestrator calls GET /queue/next to get highest priority task
+# 4. Orchestrator executes pipeline
+# 5. Orchestrator publishes agent.pipeline.completed to NATS
+# 6. Agent Intel moves task to history, updates metrics
+# 7. Cycle repeats
+
+########################################
+# 6. MONITORING & DEBUG
+########################################
+
+### Check if Tasks Exist in Queue
+# If no tasks, workflow won't return anything
+# Create tasks using the root api-test.http workflow
+GET {{baseUrl}}/api/v1/queue/status
+
+###
+
+### View Historical Performance
+# Check completed/failed task counts and average runtime
+GET {{baseUrl}}/api/v1/metrics
+
+###
+
+### Test Prioritization Logic - Multiple Calls
+# Call multiple times to see if different tasks are returned
+# (Only happens if scores are very close)
+GET {{baseUrl}}/api/v1/queue/next
+
+###
+
+GET {{baseUrl}}/api/v1/queue/next
+
+###
+
+GET {{baseUrl}}/api/v1/queue/next
+
+###
+
+########################################
+# NOTES
+########################################
+#
+# Agent Intel Service Architecture:
+# - Event-driven consumer (NATS JetStream)
+# - MongoDB dual-collection persistence
+# - 5-metric priority scoring engine
+# - RESTful query API
+#
+# NATS Integration:
+# - Stream: AGENT
+# - Subjects:
+#   * agent.task.new → Creates task in pending_tasks
+#   * agent.pipeline.completed → Moves to task_history
+# - Durable consumers: agent-intel-task-new, agent-intel-pipeline-completed
+# - Idempotent processing (prevents duplicates)
+#
+# MongoDB Schema:
+# Collection: pending_tasks
+# {
+#   task_id: "unique-id",
+#   issue_id: "123",
+#   repository: "/owner/repo",
+#   task_file_path: "/owner/repo/docs/task/123.md",
+#   created_at: ISODate,
+#   last_success_at: ISODate,
+#   avg_runtime_ms: 15000,
+#   pending_tasks_count: 3,
+#   size_bytes: 2048,
+#   status: "pending",
+#   assigned_at: null
+# }
+#
+# Collection: task_history
+# {
+#   task_id: "unique-id",
+#   status: "completed",
+#   pipeline_runtime_ms: 14500,
+#   created_at: ISODate,
+#   assigned_at: ISODate
+# }
+#
+# Performance:
+# - GET /health: < 10ms
+# - GET /queue/next: ~20-50ms (includes MongoDB query + scoring)
+# - GET /metrics: ~10-30ms (aggregation query)
+# - POST /tasks/cancel: ~15-40ms (MongoDB update)
+#
+# Monitoring:
+# - Service health: {{baseUrl}}/health
+# - NATS monitoring: http://localhost:8222
+# - MongoDB: docker exec -it agent666-mongodb mongosh
+#
+# Environment Variables:
+# - PORT: 8082
+# - MONGO_URL: mongodb://mongodb:27017
+# - NATS_URL: nats://nats:4222
+# - DB_NAME: agent_intel
+#

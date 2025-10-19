@@ -1,69 +1,111 @@
 ### Queue Service API Tests
 ### Base URL: http://localhost:8081
+### Description: Task queue management with NATS JetStream integration
+
+########################################
+# VARIABLES - Pre-configured IDs
+########################################
+@baseUrl = http://localhost:8081
+@taskId1 = task-sample-001
+@taskId2 = task-sample-002
+@taskId3 = task-sample-003
+@workflowTaskId = task-workflow-100
+
+########################################
+# 1. HEALTH & STATUS CHECKS
+########################################
 
 ### Health Check
-GET http://localhost:8081/health
+GET {{baseUrl}}/health
 
 ###
 
-### Get Queue Status (Empty)
-GET http://localhost:8081/api/queue/status
+### Get Queue Status (Initial State)
+GET {{baseUrl}}/api/queue/status
 
 ###
 
-### Create Task 1
-POST http://localhost:8081/api/tasks
+########################################
+# 2. CREATE TASKS (PUBLISHES TO NATS)
+########################################
+
+### Create Task 1 - High Priority Repo
+POST {{baseUrl}}/api/tasks
 Content-Type: application/json
 
 {
-  "issue_id": "1",
-  "repository": "/test/repo1",
-  "task_file_path": "/test/repo1/docs/task/1-first-task.md"
+  "issue_id": "16",
+  "repository": "/SKRTEEEEEE/test-agente666",
+  "task_file_path": "/SKRTEEEEEE/test-agente666/docs/task/16-agent-intel.md"
 }
 
 ###
 
-### Create Task 2
-POST http://localhost:8081/api/tasks
+### Create Task 2 - Medium Priority Repo
+POST {{baseUrl}}/api/tasks
 Content-Type: application/json
 
 {
-  "issue_id": "2",
-  "repository": "/test/repo2",
-  "task_file_path": "/test/repo2/docs/task/2-second-task.md"
+  "issue_id": "42",
+  "repository": "/octocat/Hello-World",
+  "task_file_path": "/octocat/Hello-World/docs/task/42-feature.md"
 }
 
 ###
 
-### Create Task 3
-POST http://localhost:8081/api/tasks
+### Create Task 3 - Different Repo
+POST {{baseUrl}}/api/tasks
 Content-Type: application/json
 
 {
-  "issue_id": "3",
-  "repository": "/test/repo3",
-  "task_file_path": "/test/repo3/docs/task/3-third-task.md"
+  "issue_id": "123",
+  "repository": "/torvalds/linux",
+  "task_file_path": "/torvalds/linux/docs/task/123-bugfix.md"
 }
 
 ###
+
+### Create Task 4 - Same as Task 1 (test duplicate handling)
+POST {{baseUrl}}/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "17",
+  "repository": "/SKRTEEEEEE/test-agente666",
+  "task_file_path": "/SKRTEEEEEE/test-agente666/docs/task/17-second-issue.md"
+}
+
+###
+
+########################################
+# 3. QUERY TASKS
+########################################
 
 ### List All Tasks
-GET http://localhost:8081/api/tasks
+GET {{baseUrl}}/api/tasks
 
 ###
 
 ### Get Queue Status (With Tasks)
-GET http://localhost:8081/api/queue/status
+GET {{baseUrl}}/api/queue/status
 
 ###
 
-### Get Specific Task (Replace {task-id} with actual ID from create response)
-GET http://localhost:8081/api/tasks/{task-id}
+### Get Specific Task by ID
+# NOTE: Replace the ID with one from the "List All Tasks" response
+# Example: task-abc-123-def-456
+@specificTaskId = REPLACE_WITH_ACTUAL_TASK_ID
+GET {{baseUrl}}/api/tasks/{{specificTaskId}}
 
 ###
+
+########################################
+# 4. UPDATE TASK STATUS (PUBLISHES TO NATS)
+########################################
 
 ### Update Task Status to In Progress
-PATCH http://localhost:8081/api/tasks/{task-id}/status
+# NOTE: Use an actual task ID from your list
+PATCH {{baseUrl}}/api/tasks/{{specificTaskId}}/status
 Content-Type: application/json
 
 {
@@ -73,7 +115,7 @@ Content-Type: application/json
 ###
 
 ### Update Task Status to Completed
-PATCH http://localhost:8081/api/tasks/{task-id}/status
+PATCH {{baseUrl}}/api/tasks/{{specificTaskId}}/status
 Content-Type: application/json
 
 {
@@ -83,7 +125,7 @@ Content-Type: application/json
 ###
 
 ### Update Task Status to Failed
-PATCH http://localhost:8081/api/tasks/{task-id}/status
+PATCH {{baseUrl}}/api/tasks/{{specificTaskId}}/status
 Content-Type: application/json
 
 {
@@ -92,61 +134,31 @@ Content-Type: application/json
 
 ###
 
-### Delete Task
-DELETE http://localhost:8081/api/tasks/{task-id}
-
-###
-
-### Complete Workflow Test
-### Step 1: Create a task
-POST http://localhost:8081/api/tasks
+### Update Task Status to Pending (reset)
+PATCH {{baseUrl}}/api/tasks/{{specificTaskId}}/status
 Content-Type: application/json
 
 {
-  "issue_id": "100",
-  "repository": "/workflow/test",
-  "task_file_path": "/workflow/test/docs/task/100-workflow.md"
+  "status": "pending"
 }
 
 ###
 
-### Step 2: List all tasks (copy the ID from response above)
-GET http://localhost:8081/api/tasks
+########################################
+# 5. DELETE TASKS (PUBLISHES TO NATS)
+########################################
+
+### Delete Specific Task
+DELETE {{baseUrl}}/api/tasks/{{specificTaskId}}
 
 ###
 
-### Step 3: Update to in_progress (replace {task-id})
-PATCH http://localhost:8081/api/tasks/{task-id}/status
-Content-Type: application/json
+########################################
+# 6. ERROR TESTING
+########################################
 
-{
-  "status": "in_progress"
-}
-
-###
-
-### Step 4: Get queue status (should show 1 in_progress)
-GET http://localhost:8081/api/queue/status
-
-###
-
-### Step 5: Update to completed
-PATCH http://localhost:8081/api/tasks/{task-id}/status
-Content-Type: application/json
-
-{
-  "status": "completed"
-}
-
-###
-
-### Step 6: Verify final status
-GET http://localhost:8081/api/queue/status
-
-###
-
-### Error Testing - Invalid JSON
-POST http://localhost:8081/api/tasks
+### Error: Invalid JSON
+POST {{baseUrl}}/api/tasks
 Content-Type: application/json
 
 {
@@ -156,32 +168,234 @@ Content-Type: application/json
 
 ###
 
-### Error Testing - Missing Required Fields
-POST http://localhost:8081/api/tasks
+### Error: Missing Required Fields
+POST {{baseUrl}}/api/tasks
 Content-Type: application/json
 
 {
-  "issue_id": "error-test"
+  "issue_id": "999"
 }
 
 ###
 
-### Error Testing - Invalid Status
-PATCH http://localhost:8081/api/tasks/{task-id}/status
+### Error: Invalid Status Value
+PATCH {{baseUrl}}/api/tasks/{{specificTaskId}}/status
 Content-Type: application/json
 
 {
-  "status": "invalid_status"
+  "status": "invalid_status_name"
 }
 
 ###
 
-### Error Testing - Non-existent Task
-GET http://localhost:8081/api/tasks/non-existent-id
+### Error: Non-existent Task (GET)
+GET {{baseUrl}}/api/tasks/non-existent-task-id-12345
 
 ###
 
-### Error Testing - Delete Non-existent Task
-DELETE http://localhost:8081/api/tasks/non-existent-id
+### Error: Non-existent Task (DELETE)
+DELETE {{baseUrl}}/api/tasks/non-existent-task-id-12345
 
 ###
+
+### Error: Non-existent Task (UPDATE)
+PATCH {{baseUrl}}/api/tasks/non-existent-task-id-12345/status
+Content-Type: application/json
+
+{
+  "status": "completed"
+}
+
+###
+
+########################################
+# 7. COMPLETE WORKFLOW - TASK LIFECYCLE
+########################################
+
+### ✅ WORKFLOW STEP 1: Check Initial Status
+# Verify queue is ready
+GET {{baseUrl}}/api/queue/status
+
+###
+
+### ✅ WORKFLOW STEP 2: Create Workflow Task
+# Creates task and publishes to NATS (tasks.new)
+POST {{baseUrl}}/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "100",
+  "repository": "/workflow/test-repo",
+  "task_file_path": "/workflow/test-repo/docs/task/100-complete-workflow.md"
+}
+
+###
+
+### ✅ WORKFLOW STEP 3: List All Tasks
+# Copy the task ID from the response (look for "id" field)
+# It will look like: "task-abc123-def456-..."
+GET {{baseUrl}}/api/tasks
+
+###
+
+### ✅ WORKFLOW STEP 4: Get Specific Task
+# Replace TASK_ID_HERE with the ID from Step 3
+@workflowTaskIdActual = TASK_ID_HERE
+GET {{baseUrl}}/api/tasks/{{workflowTaskIdActual}}
+
+###
+
+### ✅ WORKFLOW STEP 5: Start Processing (Update to in_progress)
+# Simulates queue-worker picking up the task
+# Publishes to NATS (tasks.status)
+PATCH {{baseUrl}}/api/tasks/{{workflowTaskIdActual}}/status
+Content-Type: application/json
+
+{
+  "status": "in_progress"
+}
+
+###
+
+### ✅ WORKFLOW STEP 6: Check Queue Status
+# Should show 1 task in_progress
+GET {{baseUrl}}/api/queue/status
+
+###
+
+### ✅ WORKFLOW STEP 7: Complete Task
+# Simulates successful task execution
+# Publishes to NATS (tasks.status)
+PATCH {{baseUrl}}/api/tasks/{{workflowTaskIdActual}}/status
+Content-Type: application/json
+
+{
+  "status": "completed"
+}
+
+###
+
+### ✅ WORKFLOW STEP 8: Verify Completion
+# Should show 1 completed task, 0 in_progress
+GET {{baseUrl}}/api/queue/status
+
+###
+
+### ✅ WORKFLOW STEP 9: Get Final Task State
+GET {{baseUrl}}/api/tasks/{{workflowTaskIdActual}}
+
+###
+
+### ✅ WORKFLOW STEP 10: Optional - Delete Task
+# Clean up after testing
+DELETE {{baseUrl}}/api/tasks/{{workflowTaskIdActual}}
+
+###
+
+### ✅ WORKFLOW STEP 11: Verify Deletion
+# Task should be gone
+GET {{baseUrl}}/api/queue/status
+
+###
+
+### ✅ WORKFLOW COMPLETE
+# Expected Flow:
+# 1. Initial status: empty queue
+# 2. Task created → Published to NATS stream "TASKS" subject "tasks.new"
+# 3. Task appears in queue with status "pending"
+# 4. Status updated to "in_progress" → Published to "tasks.status"
+# 5. Queue shows 1 in_progress
+# 6. Status updated to "completed" → Published to "tasks.status"
+# 7. Queue shows 1 completed
+# 8. Task data retrieved successfully
+# 9. Task deleted → Published to "tasks.delete"
+# 10. Queue is empty again
+#
+# NATS Messages Published:
+# - tasks.new: When task is created
+# - tasks.status: When task status changes
+# - tasks.delete: When task is deleted
+#
+# Next Steps:
+# - Check queue-worker-go logs to see if it consumed the messages
+# - Verify NATS stream at http://localhost:8222/jsz
+
+########################################
+# 8. BATCH OPERATIONS
+########################################
+
+### Create Multiple Tasks Quickly
+POST {{baseUrl}}/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "201",
+  "repository": "/batch/repo1",
+  "task_file_path": "/batch/repo1/docs/task/201.md"
+}
+
+###
+
+POST {{baseUrl}}/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "202",
+  "repository": "/batch/repo1",
+  "task_file_path": "/batch/repo1/docs/task/202.md"
+}
+
+###
+
+POST {{baseUrl}}/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "203",
+  "repository": "/batch/repo2",
+  "task_file_path": "/batch/repo2/docs/task/203.md"
+}
+
+###
+
+### View Batch Results
+GET {{baseUrl}}/api/queue/status
+
+###
+
+########################################
+# NOTES
+########################################
+#
+# Queue Service Architecture:
+# - In-memory cache for fast access
+# - NATS JetStream for distributed messaging
+# - Worker pattern for async processing
+#
+# NATS Stream Configuration:
+# - Stream Name: TASKS
+# - Subjects: tasks.* (tasks.new, tasks.update, tasks.delete, tasks.status)
+# - Retention: WorkQueue (messages deleted after ACK)
+# - Storage: File (persisted to disk)
+# - Max Age: 7 days
+#
+# Consumer Configuration:
+# - Consumer Name: task-workers (durable)
+# - Ack Policy: Explicit (manual acknowledgment)
+# - Max Deliver: 3 attempts
+# - Ack Wait: 30 seconds
+#
+# Task Status Flow:
+# pending → in_progress → completed
+#                      └→ failed
+#
+# API Response Times:
+# - Health: < 1ms
+# - Create Task: ~5-10ms (includes NATS publish)
+# - List Tasks: ~1-5ms (in-memory)
+# - Update Status: ~5-10ms (includes NATS publish)
+#
+# Monitoring:
+# - NATS monitoring: http://localhost:8222
+# - Stream info: http://localhost:8222/jsz?streams=true
+#

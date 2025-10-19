@@ -1,0 +1,207 @@
+### GitHub API Service - API Tests
+### Base URL: http://localhost:8083
+### Description: Service for fetching GitHub user issues and pull requests
+
+########################################
+# 1. HEALTH & STATUS CHECKS
+########################################
+
+### Health Check
+GET http://localhost:8083/health
+
+###
+
+### Root Endpoint (Welcome)
+GET http://localhost:8083/
+
+###
+
+########################################
+# 2. GITHUB ISSUES - REAL USERS
+########################################
+
+### Get All Issues - User: SKRTEEEEEE
+GET http://localhost:8083/issues/SKRTEEEEEE
+
+###
+
+### Get ONLY Open Issues - User: SKRTEEEEEE
+GET http://localhost:8083/issues/SKRTEEEEEE?q=open
+
+###
+
+### Get All Issues - User: torvalds (Linux creator)
+GET http://localhost:8083/issues/torvalds
+
+###
+
+### Get ONLY Open Issues - User: torvalds
+GET http://localhost:8083/issues/torvalds?q=open
+
+###
+
+### Get All Issues - User: microsoft
+GET http://localhost:8083/issues/microsoft
+
+###
+
+### Get ONLY Open Issues - User: microsoft
+GET http://localhost:8083/issues/microsoft?q=open
+
+###
+
+########################################
+# 3. GITHUB PULL REQUESTS - REAL USERS
+########################################
+
+### Get All PRs - User: SKRTEEEEEE
+GET http://localhost:8083/pr/SKRTEEEEEE
+
+###
+
+### Get ONLY Open PRs - User: SKRTEEEEEE
+GET http://localhost:8083/pr/SKRTEEEEEE?q=open
+
+###
+
+### Get All PRs - User: torvalds
+GET http://localhost:8083/pr/torvalds
+
+###
+
+### Get ONLY Open PRs - User: torvalds
+GET http://localhost:8083/pr/torvalds?q=open
+
+###
+
+### Get All PRs - User: microsoft
+GET http://localhost:8083/pr/microsoft
+
+###
+
+### Get ONLY Open PRs - User: microsoft
+GET http://localhost:8083/pr/microsoft?q=open
+
+###
+
+########################################
+# 4. ERROR TESTING
+########################################
+
+### Error: Non-existent User
+GET http://localhost:8083/issues/this-user-does-not-exist-12345
+
+###
+
+### Error: Invalid Endpoint
+GET http://localhost:8083/invalid-endpoint
+
+###
+
+### Error: Empty Username
+GET http://localhost:8083/issues/
+
+###
+
+########################################
+# 5. CACHE TESTING
+########################################
+
+### First Request (Cache MISS) - Should take longer
+GET http://localhost:8083/issues/SKRTEEEEEE?q=open
+
+###
+
+### Second Request (Cache HIT) - Should be instant (within 5 min TTL)
+GET http://localhost:8083/issues/SKRTEEEEEE?q=open
+
+###
+
+########################################
+# 6. WORKFLOW COMPLETE - GITHUB DATA COLLECTION
+########################################
+
+### ✅ WORKFLOW STEP 1: Health Check
+# Verify service is running
+GET http://localhost:8083/health
+
+###
+
+### ✅ WORKFLOW STEP 2: Get User Open Issues
+# Collect open issues for a specific user (e.g., SKRTEEEEEE)
+# These issues will be used to create tasks
+GET http://localhost:8083/issues/SKRTEEEEEE?q=open
+
+###
+
+### ✅ WORKFLOW STEP 3: Get User Open PRs
+# Collect open pull requests
+GET http://localhost:8083/pr/SKRTEEEEEE?q=open
+
+###
+
+### ✅ WORKFLOW STEP 4: Get All Repository Data
+# Get complete view of user's issues (all states)
+# Useful for historical analysis
+GET http://localhost:8083/issues/SKRTEEEEEE
+
+###
+
+### ✅ WORKFLOW STEP 5: Verify Cache Performance
+# Second call should be from cache (< 5ms response time)
+GET http://localhost:8083/issues/SKRTEEEEEE?q=open
+
+###
+
+### ✅ WORKFLOW COMPLETE
+# Expected Results:
+# - Step 1: Status 200 OK, response "OK"
+# - Step 2: JSON array with open issues grouped by repository
+# - Step 3: JSON array with open PRs grouped by repository
+# - Step 4: JSON array with all issues (open + closed)
+# - Step 5: Same as Step 2 but much faster (cached)
+#
+# Next Steps in Full Workflow:
+# 1. Parse issues from Step 2
+# 2. For each issue, create a task in queue-go or agent-intel-go
+# 3. Process tasks through the pipeline
+
+###
+
+########################################
+# 7. PERFORMANCE COMPARISON
+########################################
+
+### Large User (Many Repos) - Without Cache
+# First request - measures actual GitHub API performance
+GET http://localhost:8083/issues/google
+
+###
+
+### Large User (Many Repos) - With Cache
+# Second request - measures cache performance
+GET http://localhost:8083/issues/google
+
+###
+
+########################################
+# NOTES
+########################################
+# 
+# Rate Limits:
+# - Without GITHUB_TOKEN: 60 requests/hour
+# - With GITHUB_TOKEN: 5000 requests/hour
+#
+# To set token: docker run -e GITHUB_TOKEN=ghp_xxxxx app-go
+#
+# Cache:
+# - TTL: 5 minutes
+# - Type: In-memory (resets on service restart)
+# - Thread-safe with sync.RWMutex
+#
+# Optimizations:
+# - Connection pooling (100 idle connections)
+# - Gzip compression
+# - Keep-Alive enabled
+# - Concurrent repository fetching
+#
