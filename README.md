@@ -35,10 +35,10 @@ Test the endpoints:
 ```bash
 curl http://localhost:8080/                    # Returns: Hello World!
 curl http://localhost:8080/health              # Returns: OK
-curl http://localhost:8080/issues/octocat      # Returns: JSON with all issues grouped by repository
-curl http://localhost:8080/issues/octocat?q=open  # Returns: JSON with only open issues
-curl http://localhost:8080/pr/octocat          # Returns: JSON with all pull requests grouped by repository
-curl http://localhost:8080/pr/octocat?q=open   # Returns: JSON with only open pull requests
+curl http://localhost:8080/issues/SKRTEEEEEE      # Returns: JSON with all issues grouped by repository
+curl http://localhost:8080/issues/SKRTEEEEEE?q=open  # Returns: JSON with only open issues
+curl http://localhost:8080/pr/SKRTEEEEEE          # Returns: JSON with all pull requests grouped by repository
+curl http://localhost:8080/pr/SKRTEEEEEE?q=open   # Returns: JSON with only open pull requests
 ```
 
 The `/issues/{user}` endpoint returns a JSON array of repositories with issues, where each repository includes:

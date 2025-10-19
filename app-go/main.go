@@ -89,13 +89,19 @@ func IssuesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract username from URL path
+	// Extract username and optional repository from URL path
 	path := strings.TrimPrefix(r.URL.Path, "/issues/")
-	username := strings.TrimSpace(path)
+	parts := strings.Split(path, "/")
+	username := strings.TrimSpace(parts[0])
 
-	if username == "" || username == "/" {
+	if username == "" {
 		http.Error(w, "Username is required", http.StatusBadRequest)
 		return
+	}
+
+	var repository string
+	if len(parts) > 1 && parts[1] != "" {
+		repository = strings.TrimSpace(parts[1])
 	}
 
 	// Get query parameter for filtering
@@ -105,39 +111,76 @@ func IssuesHandler(w http.ResponseWriter, r *http.Request) {
 		state = "open"
 	}
 
-	// Fetch repositories for user
-	repos, err := fetchUserRepositories(username)
-	if err != nil {
-		if strings.Contains(err.Error(), "404") {
-			http.Error(w, "User not found", http.StatusNotFound)
-			return
-		}
-		http.Error(w, fmt.Sprintf("Error fetching repositories: %v", err), http.StatusInternalServerError)
-		return
-	}
-
 	// Fetch issues for each repository
 	var reposWithIssues []RepositoryWithIssues
 
-	for _, repo := range repos {
-		if repo.OpenIssuesCount > 0 {
-			issues, err := fetchRepositoryIssues(username, repo.Name, state)
+	// If repository is specified, only fetch for that repo
+	if repository != "" {
+		issues, err := fetchRepositoryIssues(username, repository, state)
+		if err != nil {
+			if strings.Contains(err.Error(), "404") {
+				http.Error(w, "Repository not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, fmt.Sprintf("Error fetching issues: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		if len(issues) > 0 {
+			// Fetch repository details
+			repoInfo, err := fetchRepositoryInfo(username, repository)
 			if err != nil {
-				log.Printf("Error fetching issues for %s: %v", repo.Name, err)
-				continue
+				log.Printf("Error fetching repository info: %v", err)
+				repoInfo = &GitHubRepo{
+					Name:     repository,
+					FullName: fmt.Sprintf("%s/%s", username, repository),
+					HTMLURL:  fmt.Sprintf("https://github.com/%s/%s", username, repository),
+				}
 			}
 
-			if len(issues) > 0 {
-				repoWithIssues := RepositoryWithIssues{
-					Name:        repo.Name,
-					FullName:    repo.FullName,
-					URL:         repo.HTMLURL,
-					Description: repo.Description,
-					Stars:       repo.StargazersCount,
-					Forks:       repo.ForksCount,
-					Issues:      issues,
+			repoWithIssues := RepositoryWithIssues{
+				Name:        repoInfo.Name,
+				FullName:    repoInfo.FullName,
+				URL:         repoInfo.HTMLURL,
+				Description: repoInfo.Description,
+				Stars:       repoInfo.StargazersCount,
+				Forks:       repoInfo.ForksCount,
+				Issues:      issues,
+			}
+			reposWithIssues = append(reposWithIssues, repoWithIssues)
+		}
+	} else {
+		// Fetch repositories for user
+		repos, err := fetchUserRepositories(username)
+		if err != nil {
+			if strings.Contains(err.Error(), "404") {
+				http.Error(w, "User not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, fmt.Sprintf("Error fetching repositories: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		for _, repo := range repos {
+			if repo.OpenIssuesCount > 0 {
+				issues, err := fetchRepositoryIssues(username, repo.Name, state)
+				if err != nil {
+					log.Printf("Error fetching issues for %s: %v", repo.Name, err)
+					continue
 				}
-				reposWithIssues = append(reposWithIssues, repoWithIssues)
+
+				if len(issues) > 0 {
+					repoWithIssues := RepositoryWithIssues{
+						Name:        repo.Name,
+						FullName:    repo.FullName,
+						URL:         repo.HTMLURL,
+						Description: repo.Description,
+						Stars:       repo.StargazersCount,
+						Forks:       repo.ForksCount,
+						Issues:      issues,
+					}
+					reposWithIssues = append(reposWithIssues, repoWithIssues)
+				}
 			}
 		}
 	}
@@ -149,6 +192,38 @@ func IssuesHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(reposWithIssues); err != nil {
 		log.Printf("Error encoding JSON: %v", err)
 	}
+}
+
+// fetchRepositoryInfo fetches details for a specific repository
+func fetchRepositoryInfo(username, repoName string) (*GitHubRepo, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s", username, repoName)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("User-Agent", "Go-Issues-Fetcher")
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var repo GitHubRepo
+	if err := json.NewDecoder(resp.Body).Decode(&repo); err != nil {
+		return nil, err
+	}
+
+	return &repo, nil
 }
 
 // fetchUserRepositories fetches all repositories for a given user
@@ -232,13 +307,19 @@ func PRHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract username from URL path
+	// Extract username and optional repository from URL path
 	path := strings.TrimPrefix(r.URL.Path, "/pr/")
-	username := strings.TrimSpace(path)
+	parts := strings.Split(path, "/")
+	username := strings.TrimSpace(parts[0])
 
-	if username == "" || username == "/" {
+	if username == "" {
 		http.Error(w, "Username is required", http.StatusBadRequest)
 		return
+	}
+
+	var repository string
+	if len(parts) > 1 && parts[1] != "" {
+		repository = strings.TrimSpace(parts[1])
 	}
 
 	// Get query parameter for filtering
@@ -248,38 +329,75 @@ func PRHandler(w http.ResponseWriter, r *http.Request) {
 		state = "open"
 	}
 
-	// Fetch repositories for user
-	repos, err := fetchUserRepositories(username)
-	if err != nil {
-		if strings.Contains(err.Error(), "404") {
-			http.Error(w, "User not found", http.StatusNotFound)
-			return
-		}
-		http.Error(w, fmt.Sprintf("Error fetching repositories: %v", err), http.StatusInternalServerError)
-		return
-	}
-
 	// Fetch pull requests for each repository
 	var reposWithPRs []RepositoryWithPRs
 
-	for _, repo := range repos {
-		prs, err := fetchRepositoryPullRequests(username, repo.Name, state)
+	// If repository is specified, only fetch for that repo
+	if repository != "" {
+		prs, err := fetchRepositoryPullRequests(username, repository, state)
 		if err != nil {
-			log.Printf("Error fetching pull requests for %s: %v", repo.Name, err)
-			continue
+			if strings.Contains(err.Error(), "404") {
+				http.Error(w, "Repository not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, fmt.Sprintf("Error fetching pull requests: %v", err), http.StatusInternalServerError)
+			return
 		}
 
 		if len(prs) > 0 {
+			// Fetch repository details
+			repoInfo, err := fetchRepositoryInfo(username, repository)
+			if err != nil {
+				log.Printf("Error fetching repository info: %v", err)
+				repoInfo = &GitHubRepo{
+					Name:     repository,
+					FullName: fmt.Sprintf("%s/%s", username, repository),
+					HTMLURL:  fmt.Sprintf("https://github.com/%s/%s", username, repository),
+				}
+			}
+
 			repoWithPRs := RepositoryWithPRs{
-				Name:         repo.Name,
-				FullName:     repo.FullName,
-				URL:          repo.HTMLURL,
-				Description:  repo.Description,
-				Stars:        repo.StargazersCount,
-				Forks:        repo.ForksCount,
+				Name:         repoInfo.Name,
+				FullName:     repoInfo.FullName,
+				URL:          repoInfo.HTMLURL,
+				Description:  repoInfo.Description,
+				Stars:        repoInfo.StargazersCount,
+				Forks:        repoInfo.ForksCount,
 				PullRequests: prs,
 			}
 			reposWithPRs = append(reposWithPRs, repoWithPRs)
+		}
+	} else {
+		// Fetch repositories for user
+		repos, err := fetchUserRepositories(username)
+		if err != nil {
+			if strings.Contains(err.Error(), "404") {
+				http.Error(w, "User not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, fmt.Sprintf("Error fetching repositories: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		for _, repo := range repos {
+			prs, err := fetchRepositoryPullRequests(username, repo.Name, state)
+			if err != nil {
+				log.Printf("Error fetching pull requests for %s: %v", repo.Name, err)
+				continue
+			}
+
+			if len(prs) > 0 {
+				repoWithPRs := RepositoryWithPRs{
+					Name:         repo.Name,
+					FullName:     repo.FullName,
+					URL:          repo.HTMLURL,
+					Description:  repo.Description,
+					Stars:        repo.StargazersCount,
+					Forks:        repo.ForksCount,
+					PullRequests: prs,
+				}
+				reposWithPRs = append(reposWithPRs, repoWithPRs)
+			}
 		}
 	}
 
