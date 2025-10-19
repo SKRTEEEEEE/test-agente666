@@ -20,13 +20,51 @@ services:
       context: ./app-go
       dockerfile: Dockerfile
     ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - qdrant_storage:/qdrant/storage
-    container_name: agent666-qdrant
+      - "8083:8080"
+    environment:
+      - PORT=8080
+    container_name: agent666-app-go
     networks:
       - agent666-network
+    restart: unless-stopped
+
+  # MongoDB database for Agent Intel Service
+  mongodb:
+    image: mongo:7.0
+    container_name: agent666-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=agent_intel
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - agent666-network
+    restart: unless-stopped
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Agent Intel Service - Priority queue and task management
+  agent-intel-go:
+    build:
+      context: ./agent-intel-go
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      - PORT=8082
+      - MONGO_URL=mongodb://mongodb:27017
+      - NATS_URL=nats://nats:4222
+      - DB_NAME=agent_intel
+    container_name: agent666-agent-intel-go
+    networks:
+      - agent666-network
+    depends_on:
+      - nats
+      - mongodb
     restart: unless-stopped
 
   # Queue API service
@@ -66,3 +104,4 @@ networks:
 
 volumes:
   nats-data:
+  mongodb_data:

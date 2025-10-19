@@ -1,0 +1,23 @@
+### Health Check
+GET http://localhost:8082/health
+
+### Get System Metrics
+GET http://localhost:8082/api/v1/metrics
+
+### Get Queue Status
+GET http://localhost:8082/api/v1/queue/status
+
+### Get Next Task (no filter)
+GET http://localhost:8082/api/v1/queue/next
+
+### Get Next Task (with repo filter)
+GET http://localhost:8082/api/v1/queue/next?repo_id=/test/repo
+
+### Cancel a Task
+POST http://localhost:8082/api/v1/tasks/cancel
+Content-Type: application/json
+
+{
+  "task_id": "task-123",
+  "reason": "Manual cancellation for testing"
+}
