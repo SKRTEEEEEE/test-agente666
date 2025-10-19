@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"log"
 	"sync"
 	"time"
 )
@@ -28,16 +29,56 @@ type Task struct {
 
 // TaskQueue represents the queue of tasks
 type TaskQueue struct {
-	tasks       []*Task
-	currentTask *Task
-	mu          sync.RWMutex
+	tasks          []*Task
+	currentTask    *Task
+	mu             sync.RWMutex
+	qdrant         *QdrantClient
+	usePersistence bool
 }
 
 // NewTaskQueue creates a new task queue
 func NewTaskQueue() *TaskQueue {
-	return &TaskQueue{
-		tasks: make([]*Task, 0),
+	q := &TaskQueue{
+		tasks:  make([]*Task, 0),
+		qdrant: NewQdrantClient(),
 	}
+
+	// Try to initialize Qdrant
+	if q.qdrant.IsAvailable() {
+		if err := q.qdrant.InitializeCollection(); err != nil {
+			log.Printf("Warning: Failed to initialize Qdrant: %v", err)
+			q.usePersistence = false
+		} else {
+			q.usePersistence = true
+			log.Println("Qdrant persistence enabled")
+
+			// Load existing tasks from Qdrant
+			if err := q.loadTasksFromPersistence(); err != nil {
+				log.Printf("Warning: Failed to load tasks from Qdrant: %v", err)
+			}
+		}
+	} else {
+		log.Println("Qdrant not available, running in memory-only mode")
+		q.usePersistence = false
+	}
+
+	return q
+}
+
+// loadTasksFromPersistence loads all tasks from Qdrant into memory
+func (q *TaskQueue) loadTasksFromPersistence() error {
+	if !q.usePersistence {
+		return nil
+	}
+
+	tasks, err := q.qdrant.ListAllTasks()
+	if err != nil {
+		return err
+	}
+
+	q.tasks = tasks
+	log.Printf("Loaded %d tasks from Qdrant", len(tasks))
+	return nil
 }
 
 // Enqueue adds a task to the queue
@@ -45,6 +86,13 @@ func (q *TaskQueue) Enqueue(task *Task) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.tasks = append(q.tasks, task)
+
+	// Save to Qdrant if persistence is enabled
+	if q.usePersistence {
+		if err := q.qdrant.SaveTask(task); err != nil {
+			log.Printf("Warning: Failed to save task to Qdrant: %v", err)
+		}
+	}
 }
 
 // Dequeue removes and returns the first task from the queue
@@ -84,21 +132,35 @@ func (q *TaskQueue) UpdateTaskStatus(id string, status string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
+	var updatedTask *Task
+
 	for _, task := range q.tasks {
 		if task.ID == id {
 			task.Status = status
 			task.UpdatedAt = time.Now()
-			return nil
+			updatedTask = task
+			break
 		}
 	}
 
-	if q.currentTask != nil && q.currentTask.ID == id {
+	if updatedTask == nil && q.currentTask != nil && q.currentTask.ID == id {
 		q.currentTask.Status = status
 		q.currentTask.UpdatedAt = time.Now()
-		return nil
+		updatedTask = q.currentTask
 	}
 
-	return errors.New("task not found")
+	if updatedTask == nil {
+		return errors.New("task not found")
+	}
+
+	// Update in Qdrant if persistence is enabled
+	if q.usePersistence {
+		if err := q.qdrant.UpdateTask(updatedTask); err != nil {
+			log.Printf("Warning: Failed to update task in Qdrant: %v", err)
+		}
+	}
+
+	return nil
 }
 
 // ListTasks returns all tasks in the queue
@@ -127,6 +189,14 @@ func (q *TaskQueue) RemoveTask(id string) error {
 	for i, task := range q.tasks {
 		if task.ID == id {
 			q.tasks = append(q.tasks[:i], q.tasks[i+1:]...)
+
+			// Delete from Qdrant if persistence is enabled
+			if q.usePersistence {
+				if err := q.qdrant.DeleteTask(id); err != nil {
+					log.Printf("Warning: Failed to delete task from Qdrant: %v", err)
+				}
+			}
+
 			return nil
 		}
 	}

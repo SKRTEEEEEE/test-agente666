@@ -21,8 +21,8 @@ docker-compose down
 ```
 
 Services will be available at:
-- **app-go**: http://localhost:8080 (GitHub API service)
 - **queue-go**: http://localhost:8081 (Task queue service)
+- **qdrant**: http://localhost:6333 (Vector database - Web UI at http://localhost:6333/dashboard)
 
 ## Projects
 
@@ -135,16 +135,19 @@ docker run --rm -v "$(pwd)/app-go:/app" -w /app golang:1.21-alpine go vet ./...
 
 ### queue-go
 
-A Go HTTP server that provides task queue management for the Agent666 system.
+A Go HTTP server that provides task queue management for the Agent666 system with vector database persistence.
 
 #### Features
 - HTTP server running on port 8081
 - RESTful API for task queue management
+- **Vector database persistence using Qdrant** - Tasks persist across restarts
 - Thread-safe queue operations with mutex locks
 - Comprehensive test suite (unit, integration, and API tests)
 - Health check endpoint
 - Task status tracking (pending, in_progress, completed, failed)
+- Graceful degradation to memory-only mode if Qdrant is unavailable
 - Fully containerized with Docker
+- API testing suite with HTTP examples (`api-test.http`)
 
 #### API Endpoints
 
@@ -248,11 +251,26 @@ The application includes:
 - `main.go` - Main application entry point
 - `queue.go` - Queue data structure and operations
 - `handlers.go` - HTTP request handlers
+- `persistence.go` - Qdrant vector database integration
 - `queue_test.go` - Unit tests for queue operations
 - `handlers_test.go` - Unit tests for HTTP handlers
 - `integration_test.go` - Integration tests
+- `api-test.http` - HTTP API examples for manual testing (use with REST Client extensions)
 - `Dockerfile` - Multi-stage Docker build with test execution
 - `go.mod` / `go.sum` - Go module dependencies
+
+#### Persistence
+
+The queue service uses **Qdrant** vector database for persistence:
+- Tasks are automatically saved to Qdrant when created, updated, or deleted
+- On startup, the service loads all existing tasks from Qdrant
+- If Qdrant is unavailable, the service falls back to memory-only mode
+- Set `QDRANT_URL` environment variable to configure Qdrant location (default: `http://localhost:6333`)
+
+**Benefits:**
+- Tasks persist across service restarts
+- Vector embeddings allow for future semantic search capabilities
+- Scalable storage for large task queues
 
 #### Testing
 

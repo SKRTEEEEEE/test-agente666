@@ -1,0 +1,187 @@
+### Queue Service API Tests
+### Base URL: http://localhost:8081
+
+### Health Check
+GET http://localhost:8081/health
+
+###
+
+### Get Queue Status (Empty)
+GET http://localhost:8081/api/queue/status
+
+###
+
+### Create Task 1
+POST http://localhost:8081/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "1",
+  "repository": "/test/repo1",
+  "task_file_path": "/test/repo1/docs/task/1-first-task.md"
+}
+
+###
+
+### Create Task 2
+POST http://localhost:8081/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "2",
+  "repository": "/test/repo2",
+  "task_file_path": "/test/repo2/docs/task/2-second-task.md"
+}
+
+###
+
+### Create Task 3
+POST http://localhost:8081/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "3",
+  "repository": "/test/repo3",
+  "task_file_path": "/test/repo3/docs/task/3-third-task.md"
+}
+
+###
+
+### List All Tasks
+GET http://localhost:8081/api/tasks
+
+###
+
+### Get Queue Status (With Tasks)
+GET http://localhost:8081/api/queue/status
+
+###
+
+### Get Specific Task (Replace {task-id} with actual ID from create response)
+GET http://localhost:8081/api/tasks/{task-id}
+
+###
+
+### Update Task Status to In Progress
+PATCH http://localhost:8081/api/tasks/{task-id}/status
+Content-Type: application/json
+
+{
+  "status": "in_progress"
+}
+
+###
+
+### Update Task Status to Completed
+PATCH http://localhost:8081/api/tasks/{task-id}/status
+Content-Type: application/json
+
+{
+  "status": "completed"
+}
+
+###
+
+### Update Task Status to Failed
+PATCH http://localhost:8081/api/tasks/{task-id}/status
+Content-Type: application/json
+
+{
+  "status": "failed"
+}
+
+###
+
+### Delete Task
+DELETE http://localhost:8081/api/tasks/{task-id}
+
+###
+
+### Complete Workflow Test
+### Step 1: Create a task
+POST http://localhost:8081/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "100",
+  "repository": "/workflow/test",
+  "task_file_path": "/workflow/test/docs/task/100-workflow.md"
+}
+
+###
+
+### Step 2: List all tasks (copy the ID from response above)
+GET http://localhost:8081/api/tasks
+
+###
+
+### Step 3: Update to in_progress (replace {task-id})
+PATCH http://localhost:8081/api/tasks/{task-id}/status
+Content-Type: application/json
+
+{
+  "status": "in_progress"
+}
+
+###
+
+### Step 4: Get queue status (should show 1 in_progress)
+GET http://localhost:8081/api/queue/status
+
+###
+
+### Step 5: Update to completed
+PATCH http://localhost:8081/api/tasks/{task-id}/status
+Content-Type: application/json
+
+{
+  "status": "completed"
+}
+
+###
+
+### Step 6: Verify final status
+GET http://localhost:8081/api/queue/status
+
+###
+
+### Error Testing - Invalid JSON
+POST http://localhost:8081/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "error-test"
+  "missing_comma": true
+}
+
+###
+
+### Error Testing - Missing Required Fields
+POST http://localhost:8081/api/tasks
+Content-Type: application/json
+
+{
+  "issue_id": "error-test"
+}
+
+###
+
+### Error Testing - Invalid Status
+PATCH http://localhost:8081/api/tasks/{task-id}/status
+Content-Type: application/json
+
+{
+  "status": "invalid_status"
+}
+
+###
+
+### Error Testing - Non-existent Task
+GET http://localhost:8081/api/tasks/non-existent-id
+
+###
+
+### Error Testing - Delete Non-existent Task
+DELETE http://localhost:8081/api/tasks/non-existent-id
+
+###
