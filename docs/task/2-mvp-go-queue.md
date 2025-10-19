@@ -4,7 +4,7 @@
 
 <!-- Brief description of what needs to be accomplished -->
 
-Implement according to specification
+Implement the MVP of the service of queue for agent666 (you can find context in docs/context-agent666.md)
 
 ## 🔑 Key Points
 
