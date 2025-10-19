@@ -19,6 +19,22 @@ A Go HTTP server that provides GitHub user issue information and basic health ch
 - Fully containerized with Docker
 - Comprehensive test suite (unit and integration tests)
 
+#### GitHub API Rate Limits
+
+The application supports GitHub Personal Access Tokens to increase API rate limits:
+- **Without token**: 60 requests/hour
+- **With token**: 5000 requests/hour
+
+To use a GitHub token, set the `GITHUB_TOKEN` environment variable.
+
+**How to create a GitHub Personal Access Token:**
+1. Go to GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
+2. Click "Generate new token (classic)"
+3. Give it a name (e.g., "app-go-api")
+4. No scopes are required for public repository access
+5. Click "Generate token"
+6. Copy the token and use it with the `-e GITHUB_TOKEN=...` flag
+
 #### Running locally with Docker
 
 Build the image:
@@ -26,9 +42,16 @@ Build the image:
 docker build -t hello-world-go:latest ./app-go
 ```
 
-Run the container:
+Run the container without authentication (60 req/hour):
 ```bash
 docker run -d -p 8080:8080 --name hello-world-go hello-world-go:latest
+```
+
+Run the container with GitHub token (5000 req/hour):
+```bash
+docker run -d -p 8080:8080 --name hello-world-go \
+  -e GITHUB_TOKEN=your_github_token_here \
+  hello-world-go:latest
 ```
 
 Test the endpoints:

@@ -6,9 +6,13 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
+
+// Global variable to store GitHub token
+var githubToken string
 
 // GitHubRepo represents a GitHub repository
 type GitHubRepo struct {
@@ -205,6 +209,11 @@ func fetchRepositoryInfo(username, repoName string) (*GitHubRepo, error) {
 
 	req.Header.Set("User-Agent", "Go-Issues-Fetcher")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	
+	// Add authentication token if available
+	if githubToken != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("token %s", githubToken))
+	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
@@ -238,6 +247,11 @@ func fetchUserRepositories(username string) ([]GitHubRepo, error) {
 	// Add User-Agent header (required by GitHub API)
 	req.Header.Set("User-Agent", "Go-Issues-Fetcher")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	
+	// Add authentication token if available
+	if githubToken != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("token %s", githubToken))
+	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
@@ -271,6 +285,11 @@ func fetchRepositoryIssues(username, repoName, state string) ([]GitHubIssue, err
 	// Add User-Agent header (required by GitHub API)
 	req.Header.Set("User-Agent", "Go-Issues-Fetcher")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	
+	// Add authentication token if available
+	if githubToken != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("token %s", githubToken))
+	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
@@ -422,6 +441,11 @@ func fetchRepositoryPullRequests(username, repoName, state string) ([]GitHubPull
 	// Add User-Agent header (required by GitHub API)
 	req.Header.Set("User-Agent", "Go-Issues-Fetcher")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	
+	// Add authentication token if available
+	if githubToken != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("token %s", githubToken))
+	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
@@ -443,6 +467,14 @@ func fetchRepositoryPullRequests(username, repoName, state string) ([]GitHubPull
 }
 
 func main() {
+	// Load GitHub token from environment variable
+	githubToken = os.Getenv("GITHUB_TOKEN")
+	if githubToken != "" {
+		log.Println("GitHub token loaded - using authenticated API requests")
+	} else {
+		log.Println("No GitHub token found - using unauthenticated API requests (rate limit: 60 req/hour)")
+	}
+
 	http.HandleFunc("/", HelloHandler)
 	http.HandleFunc("/health", HealthHandler)
 	http.HandleFunc("/issues/", IssuesHandler)
