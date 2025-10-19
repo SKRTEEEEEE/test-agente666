@@ -149,7 +149,9 @@ A Go HTTP server that provides task queue management for the Agent666 system wit
 - Comprehensive test suite (unit, integration, and API tests)
 - Health check endpoint
 - Task status tracking (pending, in_progress, completed, failed)
+- Graceful degradation to memory-only mode if Qdrant is unavailable
 - Fully containerized with Docker
+- API testing suite with HTTP examples (`api-test.http`)
 
 #### Architecture
 
@@ -278,11 +280,26 @@ The application includes:
 - `main.go` - Main application entry point
 - `queue.go` - Queue data structure and operations
 - `handlers.go` - HTTP request handlers
+- `persistence.go` - Qdrant vector database integration
 - `queue_test.go` - Unit tests for queue operations
 - `handlers_test.go` - Unit tests for HTTP handlers
 - `integration_test.go` - Integration tests
+- `api-test.http` - HTTP API examples for manual testing (use with REST Client extensions)
 - `Dockerfile` - Multi-stage Docker build with test execution
 - `go.mod` / `go.sum` - Go module dependencies
+
+#### Persistence
+
+The queue service uses **Qdrant** vector database for persistence:
+- Tasks are automatically saved to Qdrant when created, updated, or deleted
+- On startup, the service loads all existing tasks from Qdrant
+- If Qdrant is unavailable, the service falls back to memory-only mode
+- Set `QDRANT_URL` environment variable to configure Qdrant location (default: `http://localhost:6333`)
+
+**Benefits:**
+- Tasks persist across service restarts
+- Vector embeddings allow for future semantic search capabilities
+- Scalable storage for large task queues
 
 #### Testing
 

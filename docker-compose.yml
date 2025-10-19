@@ -20,10 +20,11 @@ services:
       context: ./app-go
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
-    environment:
-      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
-    container_name: agent666-app-go
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    container_name: agent666-qdrant
     networks:
       - agent666-network
     restart: unless-stopped
